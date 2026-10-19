@@ -3,13 +3,17 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Mattermost](https://img.shields.io/badge/Mattermost-v10.5%2C%20v11.11%2C%20v12%2B-blue)](https://mattermost.com)
 [![Edition](https://img.shields.io/badge/Edition-Team%20%26%20Enterprise-green)](https://mattermost.com)
-[![Authentik](https://img.shields.io/badge/Authentik-OIDC%20%2F%20OAuth2-fd4b2d)](https://goauthentik.io)
+[![Authentik](https://img.shields.io/badge/Authentik-2026.8%2B%20(Verified)-fd4b2d)](https://goauthentik.io)
 
 > **Disclaimer:** **Authentik for Mattermost** is an independent, third-party plugin developed by [Christopher Turner](https://christopherturner.io). It is not affiliated with, sponsored by, or endorsed by Mattermost, Inc. or Authentik (Authentik Security Inc.). Authentik, the Authentik logo/icon, and related marks are trademarks or registered trademarks of Authentik Security Inc. and are used solely for identification and compatibility purposes.
 
 An OpenID Connect (OIDC) Single Sign-On (SSO) plugin for **Mattermost** integrating directly with **Authentik**.
 
-Designed from the ground up to **work on Mattermost Team Edition** (the free, self-hosted version) without requiring an Enterprise or Professional commercial license, as well as on Mattermost Enterprise. Fully tested and verified end-to-end on **Mattermost v10.5, v11.11, and v12.0+** (including React 19 webapp architecture).
+Designed from the ground up to **work on Mattermost Team Edition** (the free, self-hosted version) without requiring an Enterprise or Professional commercial license, as well as on Mattermost Enterprise. Fully tested and verified end-to-end on **Mattermost v10.5, v11.11, and v12.0+** (including React 19 webapp architecture) and **Authentik 2026.8+** (official server and worker).
+
+### Compatibility
+- **Mattermost:** `v10.5.0`, `v11.11.0`, `v12.0.0+` (Team Edition and Enterprise)
+- **Authentik:** Verified with Authentik `2026.8.x`+ (and any standard OpenID Connect 1.0 provider supporting Authorization Code Flow with PKCE and discovery)
 
 ---
 

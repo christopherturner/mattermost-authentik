@@ -306,6 +306,19 @@ func (p *Plugin) initOIDCProvider(cfg *Configuration) error {
 
 	provider, err := oidc.NewProvider(ctx, issuerURL)
 	if err != nil {
+		// Attempt discovery with alternative trailing slash format (Authentik providers default to trailing slash)
+		var altIssuer string
+		if strings.HasSuffix(issuerURL, "/") {
+			altIssuer = strings.TrimRight(issuerURL, "/")
+		} else {
+			altIssuer = issuerURL + "/"
+		}
+		if p2, err2 := oidc.NewProvider(ctx, altIssuer); err2 == nil {
+			provider = p2
+			err = nil
+		}
+	}
+	if err != nil {
 		return fmt.Errorf("OIDC discovery failed for %s: %w", issuerURL, err)
 	}
 
