@@ -177,6 +177,14 @@ var loginTemplate = template.Must(template.New("login").Parse(`<!DOCTYPE html>
 			</button>
 		</form>
 
+		<form method="POST">
+			<input type="hidden" name="user_type" value="demoted">
+			<button class="btn btn-user" type="submit" style="border-left-color: #E53E3E;">
+				<div class="btn-title">&#9888; Sign In as Demoted Admin (Admin Group Removed)</div>
+				<div class="btn-desc">Email: admin@example.com &bull; Group: engineering only</div>
+			</button>
+		</form>
+
 		<div class="divider"></div>
 		<p style="font-size: 12px; color: #718096; text-align: center; margin: 0;">
 			Clicking either button will issue an authentic OIDC token and redirect back to Mattermost.
@@ -209,6 +217,15 @@ func handleAuthorize(w http.ResponseWriter, r *http.Request) {
 				FirstName: "Jane",
 				LastName:  "Administrator",
 				Groups:    []string{"authentik Admins", "engineering"},
+			}
+		} else if userType == "demoted" {
+			user = MockUser{
+				Subject:   "authentik-sub-admin-1001",
+				Email:     "admin@example.com",
+				Username:  "admin",
+				FirstName: "Jane",
+				LastName:  "Administrator",
+				Groups:    []string{"engineering"}, // Admin group removed
 			}
 		} else {
 			user = MockUser{
