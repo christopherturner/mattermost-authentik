@@ -66,13 +66,41 @@ jobs:
           done
           ls -la
 
+      - name: Extract Release Notes from CHANGELOG.md
+        id: notes
+        run: |
+          node -e '
+            const fs = require("fs");
+            const ver = "${{ steps.vars.outputs.version }}";
+            let notes = "";
+            if (fs.existsSync("CHANGELOG.md")) {
+                const content = fs.readFileSync("CHANGELOG.md", "utf8");
+                const regex = new RegExp(`## \\[${ver}\\][^\n]*\n([\\s\\S]*?)(?=\n## \\[|$)`);
+                const match = content.match(regex);
+                if (match) {
+                    notes = match[1].trim();
+                }
+            }
+            if (notes) {
+                fs.writeFileSync("RELEASE_NOTES.md", notes + "\n\n### Commits\n");
+                console.log("Extracted release notes for " + ver);
+            } else {
+                fs.writeFileSync("RELEASE_NOTES.md", "");
+            }
+          '
+
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ steps.vars.outputs.tag }}"
+          NOTES_FLAG=""
+          if [ -s RELEASE_NOTES.md ]; then
+            NOTES_FLAG="-F RELEASE_NOTES.md"
+          fi
           gh release create "$TAG" \
             dist/*.tar.gz \
             dist/*.sha256 \
             --title "Release $TAG" \
+            $NOTES_FLAG \
             --generate-notes
