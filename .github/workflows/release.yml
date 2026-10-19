@@ -1,0 +1,78 @@
+name: Build Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+      - '[0-9]+.[0-9]+.[0-9]+*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag name to release (e.g. 1.0.0 or v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build & Publish Release
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.22'
+          cache-dependency-path: server/go.sum
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+
+      - name: Determine version
+        id: vars
+        run: |
+          RAW_TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          CLEAN_VERSION="${RAW_TAG#v}"
+          echo "tag=${RAW_TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${CLEAN_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Building release for tag: ${RAW_TAG} (semantic version: ${CLEAN_VERSION})"
+
+      - name: Run server unit tests
+        run: make test
+
+      - name: Build plugin bundle
+        run: |
+          node -e '
+            const fs = require("fs");
+            const pkg = JSON.parse(fs.readFileSync("plugin.json"));
+            pkg.version = "${{ steps.vars.outputs.version }}";
+            fs.writeFileSync("plugin.json", JSON.stringify(pkg, null, 4) + "\n");
+          '
+          make bundle PLUGIN_VERSION="${{ steps.vars.outputs.version }}"
+
+      - name: Generate SHA-256 checksums
+        run: |
+          cd dist
+          for file in *.tar.gz; do
+            sha256sum "$file" > "${file}.sha256"
+          done
+          ls -la
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.vars.outputs.tag }}"
+          gh release create "$TAG" \
+            dist/*.tar.gz \
+            dist/*.sha256 \
+            --title "Release $TAG" \
+            --generate-notes

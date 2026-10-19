@@ -6,7 +6,7 @@
     "support_url": "https://christopherturner.io",
     "icon_path": "assets/authentik-icon.svg",
     "version": "1.0.0",
-    "min_server_version": "9.0.0",
+    "min_server_version": "10.5.0",
     "server": {
         "executables": {
             "linux-amd64": "server/dist/plugin-linux-amd64",
@@ -20,8 +20,8 @@
         "bundle_path": "webapp/dist/main.js"
     },
     "settings_schema": {
-        "header": "Configure OpenID Connect (OIDC) authentication with Authentik for your Mattermost instance. Works on Team Edition without an Enterprise license.\n\nNotice: This is an independent 3rd party tool developed by Christopher Turner (https://christopherturner.io), not affiliated with or endorsed by Mattermost, Inc. or Authentik.",
-        "footer": "Authentik Setup: In Authentik, create an OAuth2/OpenID Provider with Redirect URI: https://mattermost.company/plugins/io.christopherturner.mattermost-authentik/oauth2/callback. Attach the provider to an Application and configure the matching credentials below.\n\nDisclaimer: Authentik for Mattermost is an independent, third-party plugin developed by Christopher Turner (https://christopherturner.io). Not affiliated with, sponsored by, or endorsed by Mattermost, Inc. or Authentik.",
+        "header": "Configure OpenID Connect (OIDC) authentication with Authentik for your Mattermost instance. Works on Team Edition and Enterprise.",
+        "footer": "Authentik Setup: In Authentik, create an OAuth2/OpenID Provider with Redirect URI: https://mattermost.company/plugins/io.christopherturner.mattermost-authentik/oauth2/callback. Attach the provider to an Application and configure the matching credentials above.",
         "settings": [
             {
                 "key": "Enable",

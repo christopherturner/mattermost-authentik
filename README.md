@@ -1,7 +1,7 @@
 # Authentik for Mattermost
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Mattermost](https://img.shields.io/badge/Mattermost-v9.0%20--%20v12%2B-blue)](https://mattermost.com)
+[![Mattermost](https://img.shields.io/badge/Mattermost-v10.5%20%26%20v12%2B-blue)](https://mattermost.com)
 [![Edition](https://img.shields.io/badge/Edition-Team%20%26%20Enterprise-green)](https://mattermost.com)
 [![Authentik](https://img.shields.io/badge/Authentik-OIDC%20%2F%20OAuth2-fd4b2d)](https://goauthentik.io)
 
@@ -9,7 +9,7 @@
 
 An OpenID Connect (OIDC) Single Sign-On (SSO) plugin for **Mattermost** integrating directly with **Authentik**.
 
-Designed from the ground up to **work on Mattermost Team Edition** (the free, self-hosted version) without requiring an Enterprise or Professional commercial license, as well as on Mattermost Enterprise. Fully tested and compatible with **Mattermost v12+** (including React 19 webapp architecture).
+Designed from the ground up to **work on Mattermost Team Edition** (the free, self-hosted version) without requiring an Enterprise or Professional commercial license, as well as on Mattermost Enterprise. Fully tested and verified end-to-end on **Mattermost v10.5** and **v12.0+** (including React 19 webapp architecture).
 
 ---
 

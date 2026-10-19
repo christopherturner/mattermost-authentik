@@ -46,7 +46,7 @@ bundle: server webapp
 	@rm -rf dist
 	@mkdir -p dist/$(PLUGIN_ID)
 	@cp plugin.json dist/$(PLUGIN_ID)/
-	@cp LICENSE README.md dist/$(PLUGIN_ID)/ 2>/dev/null || true
+	@cp LICENSE README.md CHANGELOG.md dist/$(PLUGIN_ID)/ 2>/dev/null || true
 	@mkdir -p dist/$(PLUGIN_ID)/server/dist
 	@cp server/dist/* dist/$(PLUGIN_ID)/server/dist/
 	@mkdir -p dist/$(PLUGIN_ID)/webapp/dist
