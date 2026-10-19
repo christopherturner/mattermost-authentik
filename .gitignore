@@ -1,0 +1,20 @@
+# Build outputs
+dist/
+server/dist/
+webapp/dist/
+*.tar.gz
+test/mock-authentik/authentik-mock
+
+# Dependencies
+webapp/node_modules/
+webapp/package-lock.json
+
+# IDE / Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db

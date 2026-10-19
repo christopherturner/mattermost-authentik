@@ -1,0 +1,21 @@
+{
+  "PluginSettings": {
+    "Plugins": {
+      "io.christopherturner.mattermost-authentik": {
+        "enable": true,
+        "authentikurl": "http://localhost:9000",
+        "applicationslug": "mattermost",
+        "clientid": "mattermost-client-id",
+        "clientsecret": "mattermost-client-secret",
+        "scope": "openid profile email",
+        "admingroup": "authentik Admins",
+        "syncadminrole": true,
+        "defaultteam": "",
+        "autocreateaccounts": true,
+        "autolinkbyemail": true,
+        "buttontext": "Log in with Authentik",
+        "buttoncolor": "#FD4B2D"
+      }
+    }
+  }
+}
