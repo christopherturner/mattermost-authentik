@@ -265,14 +265,19 @@ func (p *Plugin) getHTTPClient(cfg *Configuration) *http.Client {
 	}
 
 	if strings.TrimSpace(cfg.CustomCert) != "" {
-		rootCAs, err := x509.SystemCertPool()
-		if err != nil || rootCAs == nil {
-			rootCAs = x509.NewCertPool()
-		}
-		if rootCAs.AppendCertsFromPEM([]byte(cfg.CustomCert)) {
-			tlsConfig.RootCAs = rootCAs
+		pemBytes, err := loadCertPEM(cfg.CustomCert)
+		if err != nil {
+			p.API.LogWarn("Failed to load custom certificate: " + err.Error())
 		} else {
-			p.API.LogWarn("Failed to append custom certificate to root CA pool")
+			rootCAs, err := x509.SystemCertPool()
+			if err != nil || rootCAs == nil {
+				rootCAs = x509.NewCertPool()
+			}
+			if rootCAs.AppendCertsFromPEM(pemBytes) {
+				tlsConfig.RootCAs = rootCAs
+			} else {
+				p.API.LogWarn("Failed to append custom certificate to root CA pool")
+			}
 		}
 	}
 

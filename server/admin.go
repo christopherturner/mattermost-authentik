@@ -1,9 +1,12 @@
 package main
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -197,6 +200,7 @@ type DiagnosticResponse struct {
 	Success         bool             `json:"success"`
 	EffectiveIssuer string           `json:"effective_issuer"`
 	CallbackURL     string           `json:"callback_url"`
+	ScopesSupported []string         `json:"scopes_supported,omitempty"`
 	Steps           []DiagnosticStep `json:"steps"`
 }
 
@@ -287,18 +291,26 @@ func (p *Plugin) handleDiagnoseConnection(w http.ResponseWriter, r *http.Request
 	httpClient := p.getHTTPClient(diagConfig)
 	httpClient.Timeout = 10 * time.Second
 
-	// Step 1: OpenID Connect Discovery
+	// Step 1: TLS / Certificate Check (tests if a certificate file is needed)
+	certStep := p.checkTLSCertificate(effectiveIssuer, customCert, skipTLSVerify)
+	steps = append(steps, certStep)
+	if certStep.Status == "error" {
+		overallSuccess = false
+	}
+
+	// Step 2: OpenID Connect Discovery
 	discoveryURL := effectiveIssuer + "/.well-known/openid-configuration"
 	t0 := time.Now()
 	resp, err := httpClient.Get(discoveryURL)
 	latency := time.Since(t0).Milliseconds()
 
 	var discoveryDoc struct {
-		Issuer                string `json:"issuer"`
-		AuthorizationEndpoint string `json:"authorization_endpoint"`
-		TokenEndpoint         string `json:"token_endpoint"`
-		UserinfoEndpoint      string `json:"userinfo_endpoint"`
-		JwksURI               string `json:"jwks_uri"`
+		Issuer                string   `json:"issuer"`
+		AuthorizationEndpoint string   `json:"authorization_endpoint"`
+		TokenEndpoint         string   `json:"token_endpoint"`
+		UserinfoEndpoint      string   `json:"userinfo_endpoint"`
+		JwksURI               string   `json:"jwks_uri"`
+		ScopesSupported       []string `json:"scopes_supported"`
 	}
 
 	if err != nil {
@@ -342,7 +354,7 @@ func (p *Plugin) handleDiagnoseConnection(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	// Step 2: JWKS Keys Verification
+	// Step 3: JWKS Keys Verification
 	jwksURL := discoveryDoc.JwksURI
 	if jwksURL == "" && effectiveIssuer != "" {
 		jwksURL = effectiveIssuer + "/jwks/"
@@ -398,7 +410,7 @@ func (p *Plugin) handleDiagnoseConnection(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	// Step 3: Client Credentials & Token Endpoint Validation
+	// Step 4: Client Credentials & Token Endpoint Validation
 	tokenURL := discoveryDoc.TokenEndpoint
 	if tokenURL == "" && effectiveIssuer != "" {
 		tokenURL = effectiveIssuer + "/token/"
@@ -480,6 +492,150 @@ func (p *Plugin) handleDiagnoseConnection(w http.ResponseWriter, r *http.Request
 		Success:         overallSuccess,
 		EffectiveIssuer: effectiveIssuer,
 		CallbackURL:     callbackURL,
+		ScopesSupported: discoveryDoc.ScopesSupported,
 		Steps:           steps,
 	})
+}
+
+// checkTLSCertificate tests whether a TLS connection requires a custom certificate file/Root CA,
+// validates any configured custom certificate or SkipTLSVerify setting, and returns a DiagnosticStep.
+func (p *Plugin) checkTLSCertificate(targetURL string, customCert string, skipTLSVerify bool) DiagnosticStep {
+	u, err := url.Parse(targetURL)
+	if err != nil {
+		return DiagnosticStep{
+			Name:    "TLS / SSL Certificate",
+			Status:  "error",
+			Details: fmt.Sprintf("Invalid URL '%s': %v", targetURL, err),
+		}
+	}
+
+	if u.Scheme != "https" {
+		return DiagnosticStep{
+			Name:    "TLS / SSL Certificate",
+			Status:  "ok",
+			Details: "Connection uses plain HTTP. No TLS certificate file is needed.",
+		}
+	}
+
+	host := u.Host
+	if !strings.Contains(host, ":") {
+		host = host + ":443"
+	}
+
+	dialer := &net.Dialer{
+		Timeout: 5 * time.Second,
+	}
+
+	// 1. Try standard TLS handshake using system Root CA pool (without custom cert or skipTLSVerify)
+	t0 := time.Now()
+	sysConn, sysErr := tls.DialWithDialer(dialer, "tcp", host, &tls.Config{
+		ServerName: u.Hostname(),
+	})
+	latency := time.Since(t0).Milliseconds()
+
+	if sysErr == nil {
+		defer sysConn.Close()
+		state := sysConn.ConnectionState()
+		var certInfo string
+		if len(state.PeerCertificates) > 0 {
+			peer := state.PeerCertificates[0]
+			certInfo = fmt.Sprintf(" (Subject: '%s', Issuer: '%s', Expires: %s)",
+				peer.Subject.CommonName, peer.Issuer.CommonName, peer.NotAfter.Format("2006-01-02"))
+		}
+		return DiagnosticStep{
+			Name:      "TLS / SSL Certificate",
+			Status:    "ok",
+			URL:       targetURL,
+			LatencyMs: latency,
+			Details:   "Server certificate is trusted by system Root CA pool" + certInfo + ". No custom certificate file is needed.",
+		}
+	}
+
+	// 2. System verification failed. Connect insecurely to inspect peer certificates for diagnostic details.
+	var peerInfo string
+	insecureConn, dialErr := tls.DialWithDialer(dialer, "tcp", host, &tls.Config{
+		ServerName:         u.Hostname(),
+		InsecureSkipVerify: true, //nolint:gosec
+	})
+	if dialErr != nil {
+		return DiagnosticStep{
+			Name:      "TLS / SSL Certificate",
+			Status:    "error",
+			URL:       targetURL,
+			LatencyMs: latency,
+			Details:   fmt.Sprintf("Failed to establish TCP/TLS connection to %s: %v. Check network connectivity and port.", host, dialErr),
+		}
+	}
+	defer insecureConn.Close()
+	state := insecureConn.ConnectionState()
+	if len(state.PeerCertificates) > 0 {
+		peer := state.PeerCertificates[0]
+		peerInfo = fmt.Sprintf(" (Subject: '%s', Issuer: '%s')", peer.Subject.CommonName, peer.Issuer.CommonName)
+	}
+
+	// 3. If custom certificate is configured, test if it resolves the verification failure
+	if strings.TrimSpace(customCert) != "" {
+		pemBytes, loadErr := loadCertPEM(customCert)
+		if loadErr != nil {
+			return DiagnosticStep{
+				Name:      "TLS / SSL Certificate",
+				Status:    "error",
+				URL:       targetURL,
+				LatencyMs: latency,
+				Details:   fmt.Sprintf("Custom certificate could not be loaded: %v", loadErr),
+			}
+		}
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(pemBytes) {
+			return DiagnosticStep{
+				Name:      "TLS / SSL Certificate",
+				Status:    "error",
+				URL:       targetURL,
+				LatencyMs: latency,
+				Details:   "Custom certificate is not valid PEM format. Ensure valid BEGIN and END CERTIFICATE blocks.",
+			}
+		}
+
+		customConn, customErr := tls.DialWithDialer(dialer, "tcp", host, &tls.Config{
+			ServerName: u.Hostname(),
+			RootCAs:    pool,
+		})
+		if customErr == nil {
+			defer customConn.Close()
+			return DiagnosticStep{
+				Name:      "TLS / SSL Certificate",
+				Status:    "ok",
+				URL:       targetURL,
+				LatencyMs: latency,
+				Details:   "Server uses a private or self-signed certificate" + peerInfo + ". Custom certificate file is configured and successfully verified the connection.",
+			}
+		}
+
+		return DiagnosticStep{
+			Name:      "TLS / SSL Certificate",
+			Status:    "error",
+			URL:       targetURL,
+			LatencyMs: latency,
+			Details:   fmt.Sprintf("A custom certificate is configured, but verification still failed: %v%s. Check that the certificate file matches Authentik's CA.", customErr, peerInfo),
+		}
+	}
+
+	// 4. No custom certificate provided. Check if SkipTLSVerify is bypassing the error.
+	if skipTLSVerify {
+		return DiagnosticStep{
+			Name:      "TLS / SSL Certificate",
+			Status:    "warning",
+			URL:       targetURL,
+			LatencyMs: latency,
+			Details:   fmt.Sprintf("A certificate file IS needed for secure verification: server certificate is untrusted%s (%v). 'Skip TLS Certificate Verification' is currently bypassing validation.", peerInfo, sysErr),
+		}
+	}
+
+	return DiagnosticStep{
+		Name:      "TLS / SSL Certificate",
+		Status:    "error",
+		URL:       targetURL,
+		LatencyMs: latency,
+		Details:   fmt.Sprintf("A custom certificate file IS needed! The server presented an untrusted certificate%s (%v). Upload or paste the Root CA certificate file into 'Custom Root CA' or enable 'Skip TLS Verification'.", peerInfo, sysErr),
+	}
 }

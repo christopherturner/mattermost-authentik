@@ -4,6 +4,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 )
 
@@ -18,6 +19,7 @@ type Configuration struct {
 	ClientSecret         string `json:"ClientSecret"`
 	Scope                string `json:"Scope"`
 	AdminGroup           string `json:"AdminGroup"`
+	GrantAuthentikAdmins bool   `json:"GrantAuthentikAdmins"`
 	SyncAdminRole        bool   `json:"SyncAdminRole"`
 	DefaultTeam          string `json:"DefaultTeam"`
 	AutoCreateAccounts   bool   `json:"AutoCreateAccounts"`
@@ -81,19 +83,66 @@ func (c *Configuration) IsValid() error {
 	}
 
 	if strings.TrimSpace(c.CustomCert) != "" {
+		pemBytes, err := loadCertPEM(c.CustomCert)
+		if err != nil {
+			return fmt.Errorf("failed to load custom certificate: %w", err)
+		}
 		pool := x509.NewCertPool()
-		if !pool.AppendCertsFromPEM([]byte(c.CustomCert)) {
+		if !pool.AppendCertsFromPEM(pemBytes) {
 			return fmt.Errorf("failed to parse custom certificate(s): ensure valid PEM format with BEGIN and END CERTIFICATE markers")
+		}
+	}
+
+	if strings.TrimSpace(c.Scope) != "" {
+		scopes := strings.Fields(c.Scope)
+		hasOpenID, hasProfile, hasEmail, hasGroups := false, false, false, false
+		for _, s := range scopes {
+			switch s {
+			case "openid":
+				hasOpenID = true
+			case "profile":
+				hasProfile = true
+			case "email":
+				hasEmail = true
+			case "groups":
+				hasGroups = true
+			}
+		}
+		if !hasOpenID || !hasProfile || !hasEmail || !hasGroups {
+			return fmt.Errorf("scope must include the required OIDC scopes: 'openid', 'profile', 'email', and 'groups'")
 		}
 	}
 
 	return nil
 }
 
+// loadCertPEM extracts PEM certificate bytes from either raw PEM text or a file path on disk.
+func loadCertPEM(certInput string) ([]byte, error) {
+	trimmed := strings.TrimSpace(certInput)
+	if trimmed == "" {
+		return nil, nil
+	}
+	if strings.Contains(trimmed, "-----BEGIN CERTIFICATE-----") {
+		return []byte(trimmed), nil
+	}
+	// Attempt to read as a file path
+	data, err := os.ReadFile(trimmed)
+	if err == nil && len(data) > 0 {
+		if strings.Contains(string(data), "-----BEGIN CERTIFICATE-----") {
+			return data, nil
+		}
+		return nil, fmt.Errorf("file '%s' does not contain valid PEM certificate (missing '-----BEGIN CERTIFICATE-----')", trimmed)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("not valid PEM text and could not read file '%s': %w", trimmed, err)
+	}
+	return nil, fmt.Errorf("invalid certificate input")
+}
+
 // setDefaults applies sensible fallback values.
 func (c *Configuration) setDefaults() {
 	if c.Scope == "" {
-		c.Scope = "openid profile email"
+		c.Scope = "openid profile email groups"
 	}
 	if c.ButtonText == "" {
 		c.ButtonText = "Log in with Authentik"

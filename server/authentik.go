@@ -89,15 +89,25 @@ func parseStringSlice(val interface{}) []string {
 	}
 }
 
-// hasGroup checks if the slice of groups contains targetGroup (case-insensitive).
-func hasGroup(groups []string, targetGroup string) bool {
-	target := strings.ToLower(strings.TrimSpace(targetGroup))
-	if target == "" {
+// hasGroup checks if the slice of groups contains targetGroup or any group in a comma/semicolon/newline-separated list (case-insensitive).
+func hasGroup(groups []string, targetGroupConfig string) bool {
+	if strings.TrimSpace(targetGroupConfig) == "" {
 		return false
 	}
-	for _, g := range groups {
-		if strings.ToLower(strings.TrimSpace(g)) == target {
-			return true
+
+	targets := strings.FieldsFunc(targetGroupConfig, func(r rune) bool {
+		return r == ',' || r == ';' || r == '\n'
+	})
+
+	for _, t := range targets {
+		target := strings.ToLower(strings.TrimSpace(t))
+		if target == "" {
+			continue
+		}
+		for _, g := range groups {
+			if strings.ToLower(strings.TrimSpace(g)) == target {
+				return true
+			}
 		}
 	}
 	return false
@@ -105,16 +115,23 @@ func hasGroup(groups []string, targetGroup string) bool {
 
 // syncAdminRole updates the user's System Admin role based on Authentik group membership.
 func (p *Plugin) syncAdminRole(user *model.User, userInfo *AuthentikUserInfo, config *Configuration) error {
-	if config.AdminGroup == "" || !config.SyncAdminRole {
+	if !config.SyncAdminRole {
 		return nil
 	}
 
-	isInAdminGroup := hasGroup(userInfo.Groups, config.AdminGroup)
+	isInAdminGroup := false
+	if config.GrantAuthentikAdmins && hasGroup(userInfo.Groups, "authentik Admins") {
+		isInAdminGroup = true
+	}
+	if !isInAdminGroup && config.AdminGroup != "" && hasGroup(userInfo.Groups, config.AdminGroup) {
+		isInAdminGroup = true
+	}
+
 	isCurrentlyAdmin := user.IsInRole(model.SystemAdminRoleId)
 
 	if isInAdminGroup && !isCurrentlyAdmin {
 		p.API.LogInfo("Promoting user to System Admin based on Authentik group",
-			"user_id", user.Id, "username", user.Username, "group", config.AdminGroup)
+			"user_id", user.Id, "username", user.Username)
 		newRoles := strings.TrimSpace(user.Roles + " " + model.SystemAdminRoleId)
 		if _, appErr := p.API.UpdateUserRoles(user.Id, newRoles); appErr != nil {
 			return fmt.Errorf("failed to grant system admin role: %s", appErr.Error())
@@ -122,7 +139,7 @@ func (p *Plugin) syncAdminRole(user *model.User, userInfo *AuthentikUserInfo, co
 		user.Roles = newRoles
 	} else if !isInAdminGroup && isCurrentlyAdmin {
 		p.API.LogInfo("Demoting user from System Admin based on Authentik group",
-			"user_id", user.Id, "username", user.Username, "group", config.AdminGroup)
+			"user_id", user.Id, "username", user.Username)
 
 		// Remove system_admin from roles, ensuring system_user remains
 		roleList := strings.Fields(user.Roles)

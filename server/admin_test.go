@@ -2,8 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -11,6 +14,7 @@ import (
 	"github.com/mattermost/mattermost/server/public/plugin/plugintest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 func setupTestPluginWithAPI() (*Plugin, *plugintest.API) {
@@ -145,4 +149,65 @@ func TestHandleUnlockLDAPUsers(t *testing.T) {
 	assert.True(t, resp.Success)
 	assert.Equal(t, 1, resp.Unlocked)
 	assert.Empty(t, resp.Failed)
+}
+
+func TestCheckTLSCertificate(t *testing.T) {
+	p := &Plugin{}
+
+	t.Run("plain HTTP does not need certificate file", func(t *testing.T) {
+		step := p.checkTLSCertificate("http://authentik.local:9000", "", false)
+		assert.Equal(t, "TLS / SSL Certificate", step.Name)
+		assert.Equal(t, "ok", step.Status)
+		assert.Contains(t, step.Details, "No TLS certificate file is needed")
+	})
+
+	t.Run("HTTPS with self-signed certificate", func(t *testing.T) {
+		// Launch a local TLS server with a self-signed certificate
+		tlsServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer tlsServer.Close()
+
+		certBytes := pem.EncodeToMemory(&pem.Block{
+			Type:  "CERTIFICATE",
+			Bytes: tlsServer.Certificate().Raw,
+		})
+		certPEM := string(certBytes)
+
+		t.Run("without custom cert or skipTLS detects certificate file is needed", func(t *testing.T) {
+			step := p.checkTLSCertificate(tlsServer.URL, "", false)
+			assert.Equal(t, "error", step.Status)
+			assert.Contains(t, step.Details, "A custom certificate file IS needed")
+		})
+
+		t.Run("with skipTLS reports certificate file needed for secure verification", func(t *testing.T) {
+			step := p.checkTLSCertificate(tlsServer.URL, "", true)
+			assert.Equal(t, "warning", step.Status)
+			assert.Contains(t, step.Details, "A certificate file IS needed for secure verification")
+		})
+
+		t.Run("with valid custom cert PEM string succeeds", func(t *testing.T) {
+			step := p.checkTLSCertificate(tlsServer.URL, certPEM, false)
+			assert.Equal(t, "ok", step.Status)
+			assert.Contains(t, step.Details, "successfully verified the connection")
+		})
+
+		t.Run("with valid custom cert file path succeeds", func(t *testing.T) {
+			tmpDir := t.TempDir()
+			certPath := filepath.Join(tmpDir, "server-ca.crt")
+			err := os.WriteFile(certPath, certBytes, 0600)
+			require.NoError(t, err)
+
+			step := p.checkTLSCertificate(tlsServer.URL, certPath, false)
+			assert.Equal(t, "ok", step.Status)
+			assert.Contains(t, step.Details, "successfully verified the connection")
+		})
+
+		t.Run("with wrong custom cert fails", func(t *testing.T) {
+			wrongPEM := generateTestCertPEM(t)
+			step := p.checkTLSCertificate(tlsServer.URL, wrongPEM, false)
+			assert.Equal(t, "error", step.Status)
+			assert.Contains(t, step.Details, "verification still failed")
+		})
+	})
 }

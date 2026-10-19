@@ -65,4 +65,10 @@ func TestHasGroup(t *testing.T) {
 	assert.True(t, hasGroup(groups, "DEVELOPERS"))
 	assert.False(t, hasGroup(groups, "Sales"))
 	assert.False(t, hasGroup(groups, ""))
+
+	// Multiple comma-separated groups
+	assert.True(t, hasGroup(groups, "mattermost-admins, authentik Admins"))
+	assert.True(t, hasGroup(groups, "mattermost-admins, developers, it-ops"))
+	assert.True(t, hasGroup(groups, "Sales; Support; DevOps"))
+	assert.False(t, hasGroup(groups, "Sales, Support, Marketing"))
 }

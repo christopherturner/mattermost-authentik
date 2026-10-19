@@ -150,19 +150,31 @@ def setup_authentik():
 
 def configure_mattermost():
     print("\n--- Applying Plugin Configuration to Mattermost ---")
-    commands = [
-        ["mmctl", "--local", "config", "set", "PluginSettings.Plugins.io.christopherturner.mattermost-authentik.authentikurl", AUTHENTIK_URL],
-        ["mmctl", "--local", "config", "set", "PluginSettings.Plugins.io.christopherturner.mattermost-authentik.applicationslug", "mattermost"],
-        ["mmctl", "--local", "config", "set", "PluginSettings.Plugins.io.christopherturner.mattermost-authentik.clientid", CLIENT_ID],
-        ["mmctl", "--local", "config", "set", "PluginSettings.Plugins.io.christopherturner.mattermost-authentik.clientsecret", CLIENT_SECRET],
-        ["mmctl", "--local", "config", "set", "PluginSettings.Plugins.io.christopherturner.mattermost-authentik.admingroup", ADMIN_GROUP_NAME],
-        ["mmctl", "--local", "config", "set", "PluginSettings.Plugins.io.christopherturner.mattermost-authentik.syncadminrole", "true"],
-        ["mmctl", "--local", "config", "set", "PluginSettings.Plugins.io.christopherturner.mattermost-authentik.enable", "true"],
-        ["mmctl", "--local", "plugin", "disable", "io.christopherturner.mattermost-authentik"],
-        ["mmctl", "--local", "plugin", "enable", "io.christopherturner.mattermost-authentik"]
-    ]
-    for cmd in commands:
-        subprocess.run(["docker", "exec", "test-mattermost-1"] + cmd, check=True, stdout=subprocess.DEVNULL)
+    patch = {
+        "PluginSettings": {
+            "Plugins": {
+                "io.christopherturner.mattermost-authentik": {
+                    "enable": True,
+                    "authentikurl": AUTHENTIK_URL,
+                    "applicationslug": "mattermost",
+                    "clientid": CLIENT_ID,
+                    "clientsecret": CLIENT_SECRET,
+                    "admingroup": "mattermost-admins",
+                    "grantauthentikadmins": True,
+                    "syncadminrole": True,
+                    "scope": "openid profile email groups"
+                }
+            }
+        }
+    }
+    patch_str = json.dumps(patch)
+    with open("/tmp/mm-authentik-patch.json", "w") as f:
+        f.write(patch_str)
+    subprocess.run(["docker", "cp", "/tmp/mm-authentik-patch.json", "test-mattermost-1:/tmp/patch.json"], check=True)
+    subprocess.run(["docker", "exec", "test-mattermost-1", "mmctl", "--local", "config", "patch", "/tmp/patch.json"], check=True)
+    subprocess.run(["docker", "exec", "test-mattermost-1", "mmctl", "--local", "plugin", "disable", "io.christopherturner.mattermost-authentik"], check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(["docker", "exec", "test-mattermost-1", "mmctl", "--local", "plugin", "enable", "io.christopherturner.mattermost-authentik"], check=True, stdout=subprocess.DEVNULL)
+    time.sleep(1)
     print("Mattermost plugin configured and reloaded.")
 
 def execute_login(username, password):
@@ -179,6 +191,8 @@ def execute_login(username, password):
         auth_url = resp.geturl()
     except urllib.error.HTTPError as e:
         auth_url = e.headers.get("Location")
+        if not auth_url:
+            raise RuntimeError(f"/oauth2/connect failed with HTTP {e.code}: {e.read().decode('utf-8', errors='ignore')}")
 
     # Step 2: Request authorize from Authentik -> redirects to authentication flow
     try:
@@ -186,6 +200,8 @@ def execute_login(username, password):
         flow_url = resp.geturl()
     except urllib.error.HTTPError as e:
         flow_url = e.headers.get("Location")
+        if not flow_url:
+            raise RuntimeError(f"Authentik authorize failed with HTTP {e.code}: {e.read().decode('utf-8', errors='ignore')}")
 
     parsed = urllib.parse.urlparse(flow_url)
     executor_url = f"{AUTHENTIK_URL}/api/v3/flows/executor/default-authentication-flow/?{parsed.query}"
@@ -273,7 +289,8 @@ def run_tests():
     assert diag_data.get("success"), f"Admin diagnosis failed: {diag_data}"
     print("   [PASS] Live Admin Diagnosis endpoint succeeded:")
     for step in diag_data.get("steps", []):
-        print(f"          - {step['name']}: {step['status']} ({step['latency_ms']}ms)")
+        lat = f" ({step['latency_ms']}ms)" if "latency_ms" in step else ""
+        print(f"          - {step['name']}: {step['status']}{lat} -> {step.get('details', '')}")
 
     # Phase 2: Test Standard User Isolation
     print("\n>>> Phase 2: Authenticating Standard Non-Admin User ('standarduser')")

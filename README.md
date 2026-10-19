@@ -146,8 +146,11 @@ In the System Console, navigate to **Plugins** > **Authentik Authentication**:
 | **Custom Issuer URL (Optional)** | *(Leave blank)* | Optional override if using a non-standard OIDC endpoint. |
 | **Client ID** | *(Paste from Authentik)* | Client ID from the Authentik Provider. |
 | **Client Secret** | *(Paste from Authentik)* | Client Secret from the Authentik Provider. |
-| **Scopes** | `openid profile email` | OAuth scopes to request. |
-| **Admin Group (Optional)** | `authentik Admins` | Authentik group that receives System Administrator in Mattermost. |
+| **Custom Root CA / Certificate** | *(Optional)* | Paste PEM-encoded certificate or specify a certificate file path on the Mattermost server. Tested by the built-in Connection Diagnostic. |
+| **Skip TLS Certificate Verification** | `false` | Disables TLS certificate verification (for development/testing). |
+| **Scopes** | `openid profile email groups` | OAuth scopes to request (interactive pill selector). `openid`, `profile`, `email`, and `groups` are required. |
+| **Admin Group (Optional)** | `mattermost-admins` | Custom Authentik group name(s). Supports comma-separated groups (e.g. `mattermost-admins, it-ops`). |
+| **Grant System Admin to 'authentik Admins'** | `true` | When enabled, members of Authentik's default `authentik Admins` group automatically receive System Admin in Mattermost. |
 | **Synchronize Admin Role** | `true` | Automatically grant/revoke System Admin on login based on group membership. |
 | **Default Team Handle (Optional)** | `main` | Team handle (e.g. `company` or `engineering`) to auto-join new users. |
 | **Auto-Create Accounts** | `true` | Automatically provisions accounts for new users. |

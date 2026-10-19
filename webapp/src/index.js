@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import AuthentikLoginButton from './components/AuthentikLoginButton';
 import LDAPAccountManager from './components/LDAPAccountManager';
 import ConnectionDiagnostic from './components/ConnectionDiagnostic';
+import ScopeSelector from './components/ScopeSelector';
 
 const PLUGIN_ID = 'io.christopherturner.mattermost-authentik';
 
@@ -21,10 +22,11 @@ class PluginClass {
             registry.registerCustomLoginButtonComponent(AuthentikLoginButton);
         }
 
-        // Register Admin Console custom setting for LDAP Account Management
+        // Register Admin Console custom settings
         if (registry && registry.registerAdminConsoleCustomSetting) {
             registry.registerAdminConsoleCustomSetting('LDAPAccountManager', LDAPAccountManager);
             registry.registerAdminConsoleCustomSetting('ConnectionDiagnostic', ConnectionDiagnostic);
+            registry.registerAdminConsoleCustomSetting('Scope', ScopeSelector);
         }
 
         // Start DOM observer for:

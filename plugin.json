@@ -1,7 +1,7 @@
 {
     "id": "io.christopherturner.mattermost-authentik",
     "name": "Authentik for Mattermost",
-    "description": "Third-party OpenID Connect (OIDC) Single Sign-On via Authentik for Mattermost. Disclaimer: Authentik for Mattermost is an independent, third-party tool developed by Christopher Turner (https://christopherturner.io) and is not affiliated with, sponsored by, or endorsed by Mattermost, Inc. or Authentik.",
+    "description": "OpenID Connect (OIDC) Single Sign-On via Authentik for Mattermost Team Edition and Enterprise.",
     "homepage_url": "https://christopherturner.io",
     "support_url": "https://christopherturner.io",
     "icon_path": "assets/authentik-icon.svg",
@@ -79,10 +79,10 @@
             },
             {
                 "key": "CustomCert",
-                "display_name": "Custom Root CA / Self-Signed Certificate (PEM)",
+                "display_name": "Custom Root CA / Self-Signed Certificate",
                 "type": "longtext",
-                "help_text": "Optional. Paste the PEM-encoded root CA certificate or self-signed certificate for Authentik. Required if Authentik uses a self-signed certificate or an internal private CA.",
-                "placeholder": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
+                "help_text": "Optional. Paste the PEM-encoded root CA certificate, or enter a file path to the certificate file on the Mattermost server. Required if Authentik uses a self-signed certificate or an internal private CA.",
+                "placeholder": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\nor /path/to/ca.crt",
                 "default": ""
             },
             {
@@ -93,26 +93,38 @@
                 "default": false
             },
             {
+                "key": "ConnectionDiagnostic",
+                "display_name": "Test Connection & Credentials",
+                "type": "custom",
+                "help_text": "Verify connectivity to Authentik, test if a custom certificate file is needed, validate OpenID Connect discovery, JWKS keys, and check Client ID / Secret."
+            },
+            {
                 "key": "Scope",
                 "display_name": "Scopes",
-                "type": "text",
-                "help_text": "OAuth scopes to request from Authentik. Default: openid profile email",
-                "placeholder": "openid profile email",
-                "default": "openid profile email"
+                "type": "custom",
+                "help_text": "OAuth2 / OIDC scopes requested from Authentik. 'openid', 'profile', 'email', and 'groups' are required for authentication, user profiles, and group synchronization.",
+                "default": "openid profile email groups"
             },
             {
                 "key": "AdminGroup",
                 "display_name": "Admin Group (Optional)",
                 "type": "text",
-                "help_text": "Authentik group name (e.g. 'mattermost-admins' or 'authentik Admins'). Users in this group will be granted System Administrator privileges in Mattermost.",
-                "placeholder": "authentik Admins",
-                "default": ""
+                "help_text": "Custom Authentik group name(s). Members will automatically be granted System Administrator privileges in Mattermost. Supports comma-separated group names.",
+                "placeholder": "mattermost-admins",
+                "default": "mattermost-admins"
+            },
+            {
+                "key": "GrantAuthentikAdmins",
+                "display_name": "Grant System Admin to 'authentik Admins'",
+                "type": "bool",
+                "help_text": "When enabled, members of Authentik's default 'authentik Admins' group are automatically granted System Administrator privileges in Mattermost.",
+                "default": true
             },
             {
                 "key": "SyncAdminRole",
                 "display_name": "Synchronize Admin Role",
                 "type": "bool",
-                "help_text": "If enabled and an Admin Group is configured, users will have their System Admin role granted or revoked based on their Authentik group membership on each login.",
+                "help_text": "If enabled, users will have their System Admin role granted or revoked based on their Authentik group membership on each login.",
                 "default": true
             },
             {
@@ -159,12 +171,6 @@
                 "help_text": "Background color of the login button (HEX code). Default is Authentik Orange (#FD4B2D).",
                 "placeholder": "#FD4B2D",
                 "default": "#FD4B2D"
-            },
-            {
-                "key": "ConnectionDiagnostic",
-                "display_name": "Test Connection & Credentials",
-                "type": "custom",
-                "help_text": "Verify connectivity to Authentik, test OpenID Connect discovery, validate JWKS keys, and check Client ID / Secret."
             },
             {
                 "key": "LDAPAccountManager",
