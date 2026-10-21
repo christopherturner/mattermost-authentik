@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+- Upgraded server Go dependencies including `golang.org/x/oauth2` (v0.36.0), `google.golang.org/grpc` (v1.83.2), and patched `github.com/go-jose/go-jose/v4` (v4.1.4) addressing JWE decryption vulnerability GHSA-78h2-9frx-2jm8.
+
+### Fixed
+- Fixed default scopes description in the System Console scope selector component to reflect `groups` (`openid profile email groups`).
+- Removed unused `offline_access` scope suggestion from the System Console scope selector.
+
 ## [1.0.0] - 2026-10-18
 
 ### Added

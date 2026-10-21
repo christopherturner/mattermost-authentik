@@ -7,7 +7,6 @@ const RECOMMENDED_SCOPES = [
     { name: 'profile', required: true, desc: 'User profile, names, and Authentik groups (Required)' },
     { name: 'email', required: true, desc: 'Email address and verification status (Required)' },
     { name: 'groups', required: true, desc: 'Authentik group memberships for admin sync (Required)' },
-    { name: 'offline_access', required: false, desc: 'Refresh token support' },
 ];
 
 export default function ScopeSelector(props) {
@@ -198,7 +197,7 @@ export default function ScopeSelector(props) {
 
                 {/* Standard Help Text */}
                 <div className="help-text" style={{ marginTop: '6px', fontSize: '12px', color: 'var(--center-channel-color-64, #777)' }}>
-                    OAuth scopes to request from Authentik. Default: <code>openid profile email</code>. Click <code>&times;</code> to remove or type to add custom scopes.
+                    OAuth scopes to request from Authentik. Default: <code>openid profile email groups</code>. Click <code>&times;</code> to remove or type to add custom scopes.
                 </div>
             </div>
         </div>
