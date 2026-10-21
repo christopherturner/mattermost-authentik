@@ -8,11 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Security
-- Upgraded server Go dependencies including `golang.org/x/oauth2` (v0.36.0), `google.golang.org/grpc` (v1.83.2), and patched `github.com/go-jose/go-jose/v4` (v4.1.4) addressing JWE decryption vulnerability GHSA-78h2-9frx-2jm8.
+- Upgraded Go dependencies (`oauth2`, `grpc`, and `go-jose` patch for GHSA-78h2-9frx-2jm8).
 
 ### Fixed
-- Fixed default scopes description in the System Console scope selector component to reflect `groups` (`openid profile email groups`).
-- Removed unused `offline_access` scope suggestion from the System Console scope selector.
+- Fixed missing email address and edit locking in native Profile modal for Authentik users.
+- Enhanced Security modal: added Authentik SSO details, themed badges with configured brand color, and removed hover effect on non-clickable sign-in row.
+- Prevented password field text overflow by removing redundant badge.
+- Corrected default scopes description to `openid profile email groups` and removed `offline_access`.
 
 ## [1.0.0] - 2026-10-18
 

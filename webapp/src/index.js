@@ -17,6 +17,9 @@ class PluginClass {
     initialize(registry, store) {
         this.store = store;
 
+        // Fetch plugin config eagerly so brand colors and settings are readily available
+        this.fetchPluginConfig();
+
         // Register custom login button component using official webapp registry hook
         if (registry && registry.registerCustomLoginButtonComponent) {
             registry.registerCustomLoginButtonComponent(AuthentikLoginButton);
@@ -209,6 +212,13 @@ class PluginClass {
         });
     }
 
+    getBadgeColor() {
+        if (this.pluginConfig && this.pluginConfig.button_color) {
+            return this.pluginConfig.button_color;
+        }
+        return '#FD4B2D';
+    }
+
     enhanceProfileAndSecurityEmail() {
         if (!this.store) {
             return;
@@ -225,71 +235,102 @@ class PluginClass {
             return;
         }
 
-        // 1. Account Settings modal: Profile tab (#generalSettings)
-        const generalSettings = document.getElementById('generalSettings');
-        if (generalSettings && !document.getElementById('authentik-profile-email-row')) {
-            const row = document.createElement('div');
-            row.id = 'authentik-profile-email-row';
-            row.className = 'section-min';
-            row.style.borderTop = '1px solid var(--center-channel-color-16, #e5e5e5)';
-            row.style.padding = '12px 15px';
-
-            const isAuthentik = currentUser.auth_service === 'authentik';
-            const badge = isAuthentik
-                ? '<span style="margin-left: 8px; background: #FD4B2D; color: white; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 600;">Managed by Authentik</span>'
-                : '';
-
-            row.innerHTML = `
-                <div class="user-settings__row" style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <div class="user-settings__title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Email</div>
-                        <div class="user-settings__desc" style="color: var(--center-channel-color-72, #555); font-size: 13px;">
-                            <span>${this.escapeHtml(currentUser.email || 'No email configured')}</span>
-                            ${badge}
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            // Insert before the last child or append to the tab list
-            generalSettings.appendChild(row);
+        if (!this.pluginConfig && !this.fetchingConfig) {
+            this.fetchingConfig = true;
+            this.fetchPluginConfig().then(() => {
+                this.fetchingConfig = false;
+                this.enhanceProfileAndSecurityEmail();
+            });
         }
 
-        // 2. Account Settings modal: Security tab (#securitySettings)
-        const securitySettings = document.getElementById('securitySettings');
-        if (securitySettings && currentUser.auth_service === 'authentik' && !document.getElementById('authentik-security-sso-row')) {
-            const row = document.createElement('div');
-            row.id = 'authentik-security-sso-row';
-            row.className = 'section-min';
-            row.style.borderTop = '1px solid var(--center-channel-color-16, #e5e5e5)';
-            row.style.padding = '12px 15px';
+        const badgeColor = this.getBadgeColor();
 
-            row.innerHTML = `
-                <div class="user-settings__row" style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <div class="user-settings__title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Sign-in Method</div>
-                        <div class="user-settings__desc" style="color: var(--center-channel-color-72, #555); font-size: 13px;">
-                            <span>Authentik Single Sign-On (OIDC)</span>
-                            <span style="margin-left: 8px; background: #FD4B2D; color: white; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 600;">Active</span>
-                            <div style="margin-top: 4px; font-size: 12px; color: var(--center-channel-color-56, #888);">
-                                Authentik Username: <strong>${this.escapeHtml(currentUser.username)}</strong> | Authentik Email: <strong>${this.escapeHtml(currentUser.email)}</strong>
+        // Clean up legacy custom rows if present
+        const legacyProfileRow = document.getElementById('authentik-profile-email-row');
+        if (legacyProfileRow) {
+            legacyProfileRow.remove();
+        }
+
+        // Ensure styles for non-clickable security row
+        if (!document.getElementById('authentik-custom-styles')) {
+            const style = document.createElement('style');
+            style.id = 'authentik-custom-styles';
+            style.textContent = `
+                #authentik-security-sso-row {
+                    cursor: default !important;
+                }
+                #authentik-security-sso-row:hover {
+                    background: transparent !important;
+                    background-color: transparent !important;
+                    cursor: default !important;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        // Account Settings modal: Security tab (#securitySettings) Authentik OIDC info banner
+        // Positioned below the "Security Settings" header right before the password row
+        const securitySettings = document.getElementById('securitySettings');
+        if (securitySettings && currentUser.auth_service === 'authentik') {
+            const passwordTitle = document.getElementById('passwordTitle');
+            const passwordDesc = document.getElementById('passwordDesc');
+            const passwordEdit = document.getElementById('passwordEdit');
+            const passwordSectionMin = (passwordTitle || passwordDesc || passwordEdit)?.closest('.section-min');
+
+            let row = document.getElementById('authentik-security-sso-row');
+            if (!row) {
+                row = document.createElement('div');
+                row.id = 'authentik-security-sso-row';
+                row.className = 'section-min isDisabled';
+                row.style.borderBottom = '1px solid var(--center-channel-color-16, #e5e5e5)';
+                row.style.padding = '12px 15px';
+                row.style.cursor = 'default';
+                row.style.background = 'transparent';
+
+                row.innerHTML = `
+                    <div class="user-settings__row" style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div class="user-settings__title" style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">Sign-in Method</div>
+                            <div class="user-settings__desc" style="color: var(--center-channel-color-72, #555); font-size: 13px;">
+                                <span>Authentik Single Sign-On (OIDC)</span>
+                                <span id="authentik-active-badge" style="margin-left: 8px; background: ${badgeColor}; color: white; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 600;">Active</span>
+                                <div style="margin-top: 4px; font-size: 12px; color: var(--center-channel-color-56, #888); line-height: 1.5;">
+                                    <div>Authentik Username: <strong>${this.escapeHtml(currentUser.username)}</strong></div>
+                                    <div>Authentik Email: <strong>${this.escapeHtml(currentUser.email)}</strong></div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            `;
+                `;
 
-            securitySettings.insertBefore(row, securitySettings.firstChild);
+                if (passwordSectionMin && passwordSectionMin.parentNode) {
+                    passwordSectionMin.parentNode.insertBefore(row, passwordSectionMin);
+                } else {
+                    const userSettingsContainer = securitySettings.querySelector('.user-settings') || securitySettings;
+                    userSettingsContainer.prepend(row);
+                }
+            } else {
+                // Ensure row is placed right before password row if passwordSectionMin is available
+                if (passwordSectionMin && passwordSectionMin.parentNode && row.nextSibling !== passwordSectionMin) {
+                    passwordSectionMin.parentNode.insertBefore(row, passwordSectionMin);
+                }
+                const activeBadge = row.querySelector('#authentik-active-badge');
+                if (activeBadge) {
+                    activeBadge.style.backgroundColor = badgeColor;
+                }
+            }
         }
 
-        // 3. Lock Full Name, Username, and Email editing if user is authenticated via Authentik
-        this.lockProfileFieldsForAuthentik(currentUser);
+        // Lock and enhance Full Name, Username, Email, Password, and Sign-in Method if user is authenticated via Authentik
+        this.lockProfileFieldsForAuthentik(currentUser, badgeColor);
     }
 
-    lockProfileFieldsForAuthentik(currentUser) {
+    lockProfileFieldsForAuthentik(currentUser, badgeColor) {
         if (!currentUser || currentUser.auth_service !== 'authentik') {
             return;
         }
+
+        const color = badgeColor || this.getBadgeColor();
 
         // 1. Lock Full Name
         // A. Collapsed state
@@ -304,12 +345,15 @@ class PluginClass {
             if (nameEdit) {
                 nameEdit.style.display = 'none';
             }
-            if (nameDesc && !document.getElementById('authentik-name-badge')) {
+            const existingBadge = document.getElementById('authentik-name-badge');
+            if (nameDesc && !existingBadge) {
                 const badge = document.createElement('span');
                 badge.id = 'authentik-name-badge';
-                badge.style.cssText = 'margin-left: 8px; background: #6c757d; color: white; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 600; vertical-align: middle;';
+                badge.style.cssText = `margin-left: 8px; background: ${color}; color: white; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 600; vertical-align: middle;`;
                 badge.innerText = 'Managed by Authentik';
                 nameDesc.appendChild(badge);
+            } else if (existingBadge) {
+                existingBadge.style.backgroundColor = color;
             }
         }
 
@@ -358,12 +402,15 @@ class PluginClass {
             if (usernameEdit) {
                 usernameEdit.style.display = 'none';
             }
-            if (usernameDesc && !document.getElementById('authentik-username-badge')) {
+            const existingBadge = document.getElementById('authentik-username-badge');
+            if (usernameDesc && !existingBadge) {
                 const badge = document.createElement('span');
                 badge.id = 'authentik-username-badge';
-                badge.style.cssText = 'margin-left: 8px; background: #6c757d; color: white; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 600; vertical-align: middle;';
+                badge.style.cssText = `margin-left: 8px; background: ${color}; color: white; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 600; vertical-align: middle;`;
                 badge.innerText = 'Managed by Authentik';
                 usernameDesc.appendChild(badge);
+            } else if (existingBadge) {
+                existingBadge.style.backgroundColor = color;
             }
         }
 
@@ -390,7 +437,7 @@ class PluginClass {
             }
         }
 
-        // 3. Lock native Email row if present
+        // 3. Lock native Email row if present and inject email value + badge
         const emailTitle = document.getElementById('emailTitle');
         const emailDesc = document.getElementById('emailDesc');
         const emailEdit = document.getElementById('emailEdit');
@@ -402,6 +449,74 @@ class PluginClass {
             if (emailEdit) {
                 emailEdit.style.display = 'none';
             }
+            if (emailDesc) {
+                const badgeId = 'authentik-email-badge';
+                const existingBadge = document.getElementById(badgeId);
+                if (!existingBadge || !emailDesc.textContent.trim()) {
+                    const emailText = this.escapeHtml(currentUser.email || 'No email configured');
+                    emailDesc.innerHTML = `<span>${emailText}</span> <span id="${badgeId}" style="margin-left: 8px; background: ${color}; color: white; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 600; vertical-align: middle;">Managed by Authentik</span>`;
+                } else if (existingBadge) {
+                    existingBadge.style.backgroundColor = color;
+                }
+            }
+        }
+
+        // B. Expanded state for Email (if open)
+        const primaryEmailInput = document.getElementById('primaryEmail');
+        const confirmEmailInput = document.getElementById('confirmEmail');
+        if (primaryEmailInput || confirmEmailInput) {
+            if (primaryEmailInput) {
+                primaryEmailInput.disabled = true;
+                primaryEmailInput.readOnly = true;
+                primaryEmailInput.style.backgroundColor = 'var(--center-channel-color-08, #f5f5f5)';
+                primaryEmailInput.style.cursor = 'not-allowed';
+            }
+            if (confirmEmailInput) {
+                confirmEmailInput.disabled = true;
+                confirmEmailInput.readOnly = true;
+                confirmEmailInput.style.backgroundColor = 'var(--center-channel-color-08, #f5f5f5)';
+                confirmEmailInput.style.cursor = 'not-allowed';
+            }
+            const emailSectionMax = (primaryEmailInput || confirmEmailInput).closest('.section-max');
+            if (emailSectionMax) {
+                const saveBtn = emailSectionMax.querySelector('#saveSetting') || emailSectionMax.querySelector('button[type="submit"]');
+                if (saveBtn) {
+                    saveBtn.style.display = 'none';
+                }
+                if (!document.getElementById('authentik-email-locked-notice')) {
+                    const notice = document.createElement('div');
+                    notice.id = 'authentik-email-locked-notice';
+                    notice.style.cssText = 'margin-top: 12px; padding: 8px 12px; background: rgba(253, 75, 45, 0.1); border-left: 3px solid #FD4B2D; border-radius: 3px; font-size: 13px; color: var(--center-channel-color, #333);';
+                    notice.innerText = 'Email is synchronized with your Authentik account and cannot be modified here.';
+                    emailSectionMax.appendChild(notice);
+                }
+            }
+        }
+
+        // 4. Lock native Password row in Security settings (no badge to prevent text box overflow)
+        const passwordTitle = document.getElementById('passwordTitle');
+        const passwordDesc = document.getElementById('passwordDesc');
+        const passwordEdit = document.getElementById('passwordEdit');
+        const passwordSectionMin = (passwordTitle || passwordDesc || passwordEdit)?.closest('.section-min');
+        if (passwordSectionMin) {
+            passwordSectionMin.style.pointerEvents = 'none';
+            passwordSectionMin.style.cursor = 'default';
+            passwordSectionMin.setAttribute('tabindex', '-1');
+            if (passwordEdit) {
+                passwordEdit.style.display = 'none';
+            }
+            if (passwordDesc) {
+                passwordDesc.innerText = 'Login occurs through Authentik. Password cannot be updated.';
+            }
+        }
+
+        // 5. Hide native Sign-in Method row if present (replaced by Authentik SSO banner)
+        const signinTitle = document.getElementById('signinTitle');
+        const signinDesc = document.getElementById('signinDesc');
+        const signinEdit = document.getElementById('signinEdit');
+        const signinSectionMin = (signinTitle || signinDesc || signinEdit)?.closest('.section-min');
+        if (signinSectionMin) {
+            signinSectionMin.style.display = 'none';
         }
     }
 
