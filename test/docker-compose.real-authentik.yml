@@ -64,7 +64,7 @@ services:
       - redis
 
   mattermost:
-    image: mattermost/mattermost-team-edition:latest
+    image: mattermost/mattermost-team-edition:${MM_VERSION:-12.0.1}
     restart: unless-stopped
     ports:
       - "8065:8065"

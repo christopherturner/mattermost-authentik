@@ -7,7 +7,7 @@
         "applicationslug": "mattermost",
         "clientid": "mattermost-client-id",
         "clientsecret": "mattermost-client-secret",
-        "scope": "openid profile email",
+        "scope": "openid profile email groups",
         "admingroup": "authentik Admins",
         "syncadminrole": true,
         "defaultteam": "",

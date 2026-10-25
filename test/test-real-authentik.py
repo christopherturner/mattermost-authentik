@@ -237,7 +237,7 @@ def execute_login(username, password):
         auth_resp = opener.open(auth_url)
         cb_url = auth_resp.geturl()
     except urllib.error.HTTPError as e:
-        cb_url = e.headers.get("Location")
+        cb_url = urllib.parse.urljoin(AUTHENTIK_URL, e.headers.get("Location", ""))
 
     # Step 4: Mattermost callback
     try:
