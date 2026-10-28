@@ -1,7 +1,7 @@
 # Authentik for Mattermost
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Mattermost](https://img.shields.io/badge/Mattermost-v10.5%2C%20v11.11%2C%20v12%2B-blue)](https://mattermost.com)
+[![Mattermost](https://img.shields.io/badge/Mattermost-v10.5%2C%20v11.11%2C%20v12.0.1-blue)](https://mattermost.com)
 [![Edition](https://img.shields.io/badge/Edition-Team%20%26%20Enterprise-green)](https://mattermost.com)
 [![Authentik](https://img.shields.io/badge/Authentik-2026.8%2B%20(Verified)-fd4b2d)](https://goauthentik.io)
 
@@ -9,17 +9,17 @@
 
 An OpenID Connect (OIDC) Single Sign-On (SSO) plugin for **Mattermost** integrating directly with **Authentik**.
 
-Designed from the ground up to **work on Mattermost Team Edition** (the free, self-hosted version) without requiring an Enterprise or Professional commercial license, as well as on Mattermost Enterprise. Fully tested and verified end-to-end on **Mattermost v10.5, v11.11, and v12.0+** (including React 19 webapp architecture) and **Authentik 2026.8+** (official server and worker).
+Designed to provide native Authentik authentication across **both Mattermost Team Edition and Enterprise**. Fully tested and verified end-to-end on **Mattermost v10.5, v11.11, and v12.0.1** (including React 19 webapp architecture) and **Authentik 2026.8+** (official server and worker).
 
 ### Compatibility
-- **Mattermost:** `v10.5.0`, `v11.11.0`, `v12.0.0+` (Team Edition and Enterprise)
+- **Mattermost:** `v10.5.0`, `v11.11.0`, `v12.0.1` (Team Edition and Enterprise)
 - **Authentik:** Verified with Authentik `2026.8.x`+ (and any standard OpenID Connect 1.0 provider supporting Authorization Code Flow with PKCE and discovery)
 
 ---
 
 ## Features
 
-- **Team Edition Compatible:** Bypasses the commercial Enterprise license restriction on generic OIDC / SAML SSO by implementing the OIDC Authorization Code Flow natively via Mattermost's Plugin API.
+- **Full Edition Support (Team & Enterprise):** Implements the OpenID Connect (OIDC) Authorization Code Flow natively via Mattermost's Plugin API, providing seamless SSO functionality across both Team Edition and Enterprise environments.
 - **Mattermost v12+ & React 19 Ready:** Built for Mattermost's modern web client, with zero legacy React deprecation issues and fallback DOM observers for custom login layouts.
 - **Authentik Application Auto-Discovery:** Point the plugin at your Authentik Base URL and Application Slug, and it automatically discovers endpoints via `.well-known/openid-configuration`.
 - **Authentik Group & Role Synchronization:** Map an Authentik group (e.g. `authentik Admins` or `mattermost-admins`) directly to Mattermost **System Administrator** privileges. Roles are dynamically granted or revoked upon login.
