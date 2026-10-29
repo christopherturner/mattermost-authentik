@@ -11,12 +11,16 @@ import urllib.parse
 import urllib.error
 import http.cookiejar
 
+class LocalhostCookiePolicy(http.cookiejar.DefaultCookiePolicy):
+    def return_ok_secure(self, cookie, request):
+        return True
+
 def run_test(user_type="admin"):
     print("\n=======================================================")
     print(f"Testing Login for user type: {user_type}")
     print("=======================================================")
 
-    cj = http.cookiejar.CookieJar()
+    cj = http.cookiejar.CookieJar(LocalhostCookiePolicy())
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
 
     # 1. Connect

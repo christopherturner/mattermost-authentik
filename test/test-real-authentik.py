@@ -159,8 +159,12 @@ def configure_mattermost():
     time.sleep(1)
     print("Mattermost plugin configured and reloaded.")
 
+class LocalhostCookiePolicy(http.cookiejar.DefaultCookiePolicy):
+    def return_ok_secure(self, cookie, request):
+        return True
+
 def execute_login(username, password):
-    cj = http.cookiejar.CookieJar()
+    cj = http.cookiejar.CookieJar(LocalhostCookiePolicy())
     class NoRedirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, req, fp, code, msg, headers, newurl):
             return None

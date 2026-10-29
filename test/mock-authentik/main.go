@@ -267,13 +267,14 @@ func handleAuthorize(w http.ResponseWriter, r *http.Request) {
 		}
 		authCodesLock.Unlock()
 
-		parsedTarget, _ := url.Parse(redirectURI)
-		q := parsedTarget.Query()
-		q.Set("code", code)
-		q.Set("state", state)
-		parsedTarget.RawQuery = q.Encode()
-
-		http.Redirect(w, r, parsedTarget.String(), http.StatusFound)
+		var targetBase string
+		if strings.Contains(redirectURI, "mattermost:8065") {
+			targetBase = "http://mattermost:8065/plugins/io.christopherturner.mattermost-authentik/oauth2/callback"
+		} else {
+			targetBase = "http://localhost:8065/plugins/io.christopherturner.mattermost-authentik/oauth2/callback"
+		}
+		target := fmt.Sprintf("%s?code=%s&state=%s", targetBase, url.QueryEscape(code), url.QueryEscape(state))
+		http.Redirect(w, r, target, http.StatusFound)
 	}
 }
 

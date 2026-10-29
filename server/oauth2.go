@@ -557,7 +557,7 @@ func (p *Plugin) verifyAndExtractState(signedState string) (string, error) {
 }
 
 func (p *Plugin) setStateCookie(w http.ResponseWriter, token string) {
-	c := &http.Cookie{
+	http.SetCookie(w, &http.Cookie{
 		Name:     stateCookieName,
 		Value:    token,
 		Path:     "/",
@@ -565,15 +565,11 @@ func (p *Plugin) setStateCookie(w http.ResponseWriter, token string) {
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
-	}
-	if !strings.HasPrefix(p.getSiteURL(), "https") {
-		c.Secure = false
-	}
-	http.SetCookie(w, c)
+	})
 }
 
 func (p *Plugin) clearStateCookie(w http.ResponseWriter) {
-	c := &http.Cookie{
+	http.SetCookie(w, &http.Cookie{
 		Name:     stateCookieName,
 		Value:    "",
 		Path:     "/",
@@ -581,11 +577,7 @@ func (p *Plugin) clearStateCookie(w http.ResponseWriter) {
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
-	}
-	if !strings.HasPrefix(p.getSiteURL(), "https") {
-		c.Secure = false
-	}
-	http.SetCookie(w, c)
+	})
 }
 
 func (p *Plugin) stateCookieMatches(r *http.Request, token string) bool {
@@ -612,19 +604,14 @@ func (p *Plugin) setSessionCookie(w http.ResponseWriter, session *model.Session,
 		}
 	}
 
-	isHTTPS := strings.HasPrefix(siteURL, "https")
-
 	cookies := []*http.Cookie{
 		{Name: model.SessionCookieToken, Value: session.Token, HttpOnly: true, Path: cookiePath, Domain: domain, MaxAge: maxAge, Expires: expires, Secure: true, SameSite: http.SameSiteLaxMode},
 		{Name: model.SessionCookieUser, Value: session.UserId, Path: cookiePath, Domain: domain, MaxAge: maxAge, Expires: expires, Secure: true, SameSite: http.SameSiteLaxMode},
 		{Name: model.SessionCookieCsrf, Value: csrf, Path: cookiePath, Domain: domain, MaxAge: maxAge, Expires: expires, Secure: true, SameSite: http.SameSiteLaxMode},
 	}
 	for _, c := range cookies {
-		if !isHTTPS {
-			c.Secure = false
-		}
 		if domain != "" {
-			http.SetCookie(w, &http.Cookie{Name: c.Name, Value: "", Path: cookiePath, MaxAge: -1, Secure: c.Secure, HttpOnly: c.HttpOnly, SameSite: c.SameSite})
+			http.SetCookie(w, &http.Cookie{Name: c.Name, Value: "", Path: cookiePath, MaxAge: -1, Secure: true, HttpOnly: c.HttpOnly, SameSite: c.SameSite})
 		}
 		http.SetCookie(w, c)
 	}
