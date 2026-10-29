@@ -1,9 +1,9 @@
 # Authentik for Mattermost
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Mattermost](https://img.shields.io/badge/Mattermost-v10.5%2C%20v11.11%2C%20v12.0.1-blue)](https://mattermost.com)
+[![Mattermost](https://img.shields.io/badge/Mattermost-v10.5%2C%20v11.11%2C%20v12.0.1%20(Tested)-blue)](https://mattermost.com)
 [![Edition](https://img.shields.io/badge/Edition-Team%20%26%20Enterprise-green)](https://mattermost.com)
-[![Authentik](https://img.shields.io/badge/Authentik-2026.8%2B%20(Verified)-fd4b2d)](https://goauthentik.io)
+[![Authentik](https://img.shields.io/badge/Authentik-2026.8%2B%20(Tested)-fd4b2d)](https://goauthentik.io)
 
 > **Disclaimer:** **Authentik for Mattermost** is an independent, third-party plugin developed by [Christopher Turner](https://christopherturner.io). It is not affiliated with, sponsored by, or endorsed by Mattermost, Inc. or Authentik (Authentik Security Inc.). Authentik, the Authentik logo/icon, and related marks are trademarks or registered trademarks of Authentik Security Inc. and are used solely for identification and compatibility purposes.
 
