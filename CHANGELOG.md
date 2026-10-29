@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Prevented path traversal in custom certificate loading (CWE-22, CWE-73) with normalized path checks and certificate extension whitelisting.
 - Removed disabled TLS certificate verification (CWE-295) in diagnostic connectivity checks.
 - Eliminated clear-text credential file storage (CWE-312) in integration test tooling by using pre-configured static configuration assets.
+- Enforced `Secure` attribute on session and state cookies (CWE-614).
+- Validated redirect URIs against authorized callback endpoints in mock Authentik test server (CWE-601).
+
+### Added
+- Added project repository homepage, issue tracker, and changelog resource links to README.
 
 ### Fixed
 - Fixed missing email address and edit locking in native Profile modal for Authentik users.

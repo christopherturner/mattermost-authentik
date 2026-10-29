@@ -11,6 +11,12 @@ An OpenID Connect (OIDC) Single Sign-On (SSO) plugin for **Mattermost** integrat
 
 Designed to provide native Authentik authentication across **both Mattermost Team Edition and Enterprise**. Fully tested and verified end-to-end on **Mattermost v10.5, v11.11, and v12.0.1** (including React 19 webapp architecture) and **Authentik 2026.8+** (official server and worker).
 
+### Project Resources
+- **Project Homepage & Documentation:** [https://mattermost-authentik.christopherturner.io/](https://mattermost-authentik.christopherturner.io/)
+- **Source Code Repository:** [https://github.com/christopherturner/mattermost-authentik](https://github.com/christopherturner/mattermost-authentik)
+- **Issue Tracker:** [https://github.com/christopherturner/mattermost-authentik/issues](https://github.com/christopherturner/mattermost-authentik/issues)
+- **Changelog:** [CHANGELOG.md](CHANGELOG.md)
+
 ### Compatibility
 - **Mattermost:** `v10.5.0`, `v11.11.0`, `v12.0.1` (Team Edition and Enterprise)
 - **Authentik:** Verified with Authentik `2026.8.x`+ (and any standard OpenID Connect 1.0 provider supporting Authorization Code Flow with PKCE and discovery)
@@ -219,6 +225,15 @@ Ensure your reverse proxy (Nginx, Traefik, Caddy, etc.) forwards the following h
 - `Host $host`
 
 In Mattermost, ensure **Site URL** in **System Console** > **Environment** > **Web Server** is set to your public HTTPS URL (e.g. `https://mattermost.company`).
+
+---
+
+## Links & Community
+
+- **Project Homepage:** [https://mattermost-authentik.christopherturner.io/](https://mattermost-authentik.christopherturner.io/)
+- **Repository:** [https://github.com/christopherturner/mattermost-authentik](https://github.com/christopherturner/mattermost-authentik)
+- **Issue Tracker:** [https://github.com/christopherturner/mattermost-authentik/issues](https://github.com/christopherturner/mattermost-authentik/issues)
+- **Changelog:** [CHANGELOG.md](CHANGELOG.md)
 
 ---
 

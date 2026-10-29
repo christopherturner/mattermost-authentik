@@ -12,6 +12,8 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 )
@@ -193,8 +195,24 @@ var loginTemplate = template.Must(template.New("login").Parse(`<!DOCTYPE html>
 </body>
 </html>`))
 
+func isAllowedRedirect(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return false
+	}
+	host := u.Hostname()
+	if host != "localhost" && host != "127.0.0.1" && host != "mattermost" {
+		return false
+	}
+	return strings.HasSuffix(u.Path, "/plugins/io.christopherturner.mattermost-authentik/oauth2/callback")
+}
+
 func handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	redirectURI := r.URL.Query().Get("redirect_uri")
+	if !isAllowedRedirect(redirectURI) {
+		http.Error(w, "Invalid or unauthorized redirect_uri", http.StatusBadRequest)
+		return
+	}
 	state := r.URL.Query().Get("state")
 	nonce := r.URL.Query().Get("nonce")
 	codeChallenge := r.URL.Query().Get("code_challenge")
@@ -249,8 +267,13 @@ func handleAuthorize(w http.ResponseWriter, r *http.Request) {
 		}
 		authCodesLock.Unlock()
 
-		target := fmt.Sprintf("%s?code=%s&state=%s", redirectURI, code, state)
-		http.Redirect(w, r, target, http.StatusFound)
+		parsedTarget, _ := url.Parse(redirectURI)
+		q := parsedTarget.Query()
+		q.Set("code", code)
+		q.Set("state", state)
+		parsedTarget.RawQuery = q.Encode()
+
+		http.Redirect(w, r, parsedTarget.String(), http.StatusFound)
 	}
 }
 

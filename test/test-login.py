@@ -8,12 +8,13 @@ import sys
 import json
 import urllib.request
 import urllib.parse
+import urllib.error
 import http.cookiejar
 
 def run_test(user_type="admin"):
-    print(f"\n=======================================================")
+    print("\n=======================================================")
     print(f"Testing Login for user type: {user_type}")
-    print(f"=======================================================")
+    print("=======================================================")
 
     cj = http.cookiejar.CookieJar()
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
@@ -21,11 +22,16 @@ def run_test(user_type="admin"):
     # 1. Connect
     print("1. Requesting /oauth2/connect from Mattermost plugin...")
     req = urllib.request.Request("http://localhost:8065/plugins/io.christopherturner.mattermost-authentik/oauth2/connect")
+    auth_url = ""
     try:
         resp = opener.open(req)
         auth_url = resp.geturl()
     except urllib.error.HTTPError as e:
-        auth_url = e.headers.get("Location")
+        auth_url = e.headers.get("Location") or ""
+
+    if not auth_url:
+        print("FAILED: Did not receive authorization redirect URL.")
+        sys.exit(1)
 
     print(f"   -> Redirected to Authentik: {auth_url[:70]}...")
 
@@ -33,11 +39,16 @@ def run_test(user_type="admin"):
     print("2. Authorizing in Authentik...")
     data = urllib.parse.urlencode({"user_type": user_type}).encode("utf-8")
     post_req = urllib.request.Request(auth_url, data=data, method="POST")
+    cb_url = ""
     try:
         resp = opener.open(post_req)
         cb_url = resp.geturl()
     except urllib.error.HTTPError as e:
-        cb_url = e.headers.get("Location")
+        cb_url = e.headers.get("Location") or ""
+
+    if not cb_url:
+        print("FAILED: Did not receive callback redirect URL.")
+        sys.exit(1)
 
     print(f"   -> Redirected back to callback: {cb_url[:70]}...")
 
@@ -47,12 +58,16 @@ def run_test(user_type="admin"):
     opener.open(cb_req)
 
     # 4. Check cookies
-    cookies = {c.name: c.value for c in cj}
-    if "MMAUTHTOKEN" not in cookies:
+    cookies: dict[str, str] = {c.name: c.value or "" for c in cj}
+    token = cookies.get("MMAUTHTOKEN")
+    if not token:
         print("FAILED: MMAUTHTOKEN cookie not issued.")
         sys.exit(1)
 
-    print(f"   -> Received MMAUTHTOKEN: {cookies['MMAUTHTOKEN'][:16]}...")
+    print(f"   -> Received MMAUTHTOKEN: {token[:16]}...")
+
+    cookie_header = "; ".join(f"{k}={v}" for k, v in cookies.items())
+    opener.addheaders = [("Cookie", cookie_header)]
 
     # 5. Verify /api/v4/users/me
     print("4. Fetching authenticated user profile from /api/v4/users/me...")
@@ -61,7 +76,7 @@ def run_test(user_type="admin"):
     user_data = json.loads(user_resp.read().decode("utf-8"))
     roles = user_data.get('roles', '')
 
-    print(f"   [SUCCESS] User authenticated successfully:")
+    print("   [SUCCESS] User authenticated successfully:")
     print(f"   - User ID:  {user_data.get('id')}")
     print(f"   - Username: {user_data.get('username')}")
     print(f"   - Email:    {user_data.get('email')}")
@@ -99,8 +114,8 @@ def run_test(user_type="admin"):
 
         # Test Admin LDAP Users endpoint
         ldap_req = urllib.request.Request("http://localhost:8065/plugins/io.christopherturner.mattermost-authentik/api/v1/admin/ldap-users")
-        ldap_resp = opener.open(ldap_req)
-        print(f"   [PASS] Admin LDAP endpoint returned 200 OK.")
+        opener.open(ldap_req)
+        print("   [PASS] Admin LDAP endpoint returned 200 OK.")
 
     else:
         if is_admin:

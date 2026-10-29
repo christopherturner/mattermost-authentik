@@ -9,6 +9,10 @@ test/mock-authentik/authentik-mock
 webapp/node_modules/
 webapp/package-lock.json
 
+# Python
+__pycache__/
+*.py[cod]
+
 # IDE / Editor files
 .vscode/
 .idea/

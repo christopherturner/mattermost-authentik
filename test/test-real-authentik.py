@@ -9,13 +9,13 @@ This is an independent, third-party project developed by Christopher Turner (htt
 It is not affiliated with, sponsored by, or endorsed by Mattermost or Authentik.
 """
 
-import sys
 import os
 import time
 import json
 import subprocess
 import urllib.request
 import urllib.parse
+import urllib.error
 import http.cookiejar
 
 AUTHENTIK_URL = "http://localhost:9000"
@@ -197,7 +197,7 @@ def execute_login(username, password):
         resp1 = opener.open(req1)
         stage2_url = resp1.geturl()
     except urllib.error.HTTPError as e:
-        stage2_url = urllib.parse.urljoin(AUTHENTIK_URL, e.headers.get("Location"))
+        stage2_url = urllib.parse.urljoin(AUTHENTIK_URL, e.headers.get("Location") or "")
 
     # Stage 2: Password
     post2 = json.dumps({"password": password}).encode("utf-8")
@@ -206,12 +206,12 @@ def execute_login(username, password):
         resp2 = opener.open(req2)
         stage3_url = resp2.geturl()
     except urllib.error.HTTPError as e:
-        stage3_url = urllib.parse.urljoin(AUTHENTIK_URL, e.headers.get("Location"))
+        stage3_url = urllib.parse.urljoin(AUTHENTIK_URL, e.headers.get("Location") or "")
 
     try:
         opener.open(stage3_url)
     except urllib.error.HTTPError as e:
-        stage3_url = urllib.parse.urljoin(AUTHENTIK_URL, e.headers.get("Location"))
+        stage3_url = urllib.parse.urljoin(AUTHENTIK_URL, e.headers.get("Location") or "")
         opener.open(stage3_url)
 
     # Step 3: Request auth_url with session cookie -> callback code
@@ -219,7 +219,7 @@ def execute_login(username, password):
         auth_resp = opener.open(auth_url)
         cb_url = auth_resp.geturl()
     except urllib.error.HTTPError as e:
-        cb_url = urllib.parse.urljoin(AUTHENTIK_URL, e.headers.get("Location", ""))
+        cb_url = urllib.parse.urljoin(AUTHENTIK_URL, e.headers.get("Location") or "")
 
     # Step 4: Mattermost callback
     try:
@@ -227,9 +227,12 @@ def execute_login(username, password):
     except urllib.error.HTTPError:
         pass
 
-    cookies = {c.name: c.value for c in cj}
-    if "MMAUTHTOKEN" not in cookies:
+    cookies: dict[str, str] = {c.name: c.value or "" for c in cj}
+    if not cookies.get("MMAUTHTOKEN"):
         raise RuntimeError(f"Authentication failed: MMAUTHTOKEN cookie was not issued for {username}.")
+
+    cookie_header = "; ".join(f"{k}={v}" for k, v in cookies.items())
+    opener.addheaders = [("Cookie", cookie_header)]
 
     user_req = urllib.request.Request(f"{MATTERMOST_URL}/api/v4/users/me")
     user_resp = opener.open(user_req)
