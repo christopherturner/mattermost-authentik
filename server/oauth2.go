@@ -604,17 +604,34 @@ func (p *Plugin) setSessionCookie(w http.ResponseWriter, session *model.Session,
 		}
 	}
 
-	cookies := []*http.Cookie{
-		{Name: model.SessionCookieToken, Value: session.Token, HttpOnly: true, Path: cookiePath, Domain: domain, MaxAge: maxAge, Expires: expires, Secure: true, SameSite: http.SameSiteLaxMode},
-		{Name: model.SessionCookieUser, Value: session.UserId, Path: cookiePath, Domain: domain, MaxAge: maxAge, Expires: expires, Secure: true, SameSite: http.SameSiteLaxMode},
-		{Name: model.SessionCookieCsrf, Value: csrf, Path: cookiePath, Domain: domain, MaxAge: maxAge, Expires: expires, Secure: true, SameSite: http.SameSiteLaxMode},
-	}
-	for _, c := range cookies {
+	setCookie := func(name, value string) {
 		if domain != "" {
-			http.SetCookie(w, &http.Cookie{Name: c.Name, Value: "", Path: cookiePath, MaxAge: -1, Secure: true, HttpOnly: c.HttpOnly, SameSite: c.SameSite})
+			http.SetCookie(w, &http.Cookie{
+				Name:     name,
+				Value:    "",
+				Path:     cookiePath,
+				MaxAge:   -1,
+				Secure:   true,
+				HttpOnly: true,
+				SameSite: http.SameSiteLaxMode,
+			})
 		}
-		http.SetCookie(w, c)
+		http.SetCookie(w, &http.Cookie{
+			Name:     name,
+			Value:    value,
+			HttpOnly: true,
+			Path:     cookiePath,
+			Domain:   domain,
+			MaxAge:   maxAge,
+			Expires:  expires,
+			Secure:   true,
+			SameSite: http.SameSiteLaxMode,
+		})
 	}
+
+	setCookie(model.SessionCookieToken, session.Token)
+	setCookie(model.SessionCookieUser, session.UserId)
+	setCookie(model.SessionCookieCsrf, csrf)
 }
 
 func (p *Plugin) getCookieDomain() string {
