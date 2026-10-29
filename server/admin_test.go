@@ -28,11 +28,8 @@ func setupTestPluginWithAPI() (*Plugin, *plugintest.API) {
 func TestAdminEndpoints_AuthorizationCheck(t *testing.T) {
 	p, api := setupTestPluginWithAPI()
 
-	// Non-admin user
-	api.On("GetUser", "non-admin-id").Return(&model.User{
-		Id:    "non-admin-id",
-		Roles: model.SystemUserRoleId,
-	}, nil)
+	// Non-admin user does not have system manage permission
+	api.On("HasPermissionTo", "non-admin-id", model.PermissionManageSystem).Return(false)
 
 	endpoints := []struct {
 		method string
@@ -49,7 +46,7 @@ func TestAdminEndpoints_AuthorizationCheck(t *testing.T) {
 			req := httptest.NewRequest(ep.method, ep.path, strings.NewReader("{}"))
 			w := httptest.NewRecorder()
 			p.router.ServeHTTP(w, req)
-			assert.Equal(t, http.StatusForbidden, w.Code)
+			assert.Equal(t, http.StatusUnauthorized, w.Code)
 		})
 
 		t.Run("non-admin user on "+ep.path, func(t *testing.T) {
@@ -65,11 +62,7 @@ func TestAdminEndpoints_AuthorizationCheck(t *testing.T) {
 func TestHandleGetLDAPUsers(t *testing.T) {
 	p, api := setupTestPluginWithAPI()
 
-	adminUser := &model.User{
-		Id:    "admin-user-id",
-		Roles: model.SystemAdminRoleId + " " + model.SystemUserRoleId,
-	}
-	api.On("GetUser", "admin-user-id").Return(adminUser, nil)
+	api.On("HasPermissionTo", "admin-user-id", model.PermissionManageSystem).Return(true)
 
 	ldapUser1 := &model.User{
 		Id:          "u1",
@@ -119,11 +112,7 @@ func TestHandleGetLDAPUsers(t *testing.T) {
 func TestHandleUnlockLDAPUsers(t *testing.T) {
 	p, api := setupTestPluginWithAPI()
 
-	adminUser := &model.User{
-		Id:    "admin-user-id",
-		Roles: model.SystemAdminRoleId,
-	}
-	api.On("GetUser", "admin-user-id").Return(adminUser, nil)
+	api.On("HasPermissionTo", "admin-user-id", model.PermissionManageSystem).Return(true)
 	api.On("LogInfo", mock.Anything, mock.Anything, mock.Anything).Maybe()
 
 	api.On("UpdateUserAuth", "target-ldap-uid", &model.UserAuth{

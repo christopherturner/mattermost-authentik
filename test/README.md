@@ -6,59 +6,129 @@ This directory provides automated end-to-end integration test suites for the Aut
 1. **Mock Authentik (Fast & Lightweight):** Standalone Go mock server running in seconds without external dependencies.
 2. **Real Authentik Instance (Full Production Stack):** Official Authentik server, worker, Redis, and PostgreSQL running live flows against Mattermost.
 
----
-
-## Option A: Mock Authentik (Fast)
-
-Ideal for quick sanity checks and rapid development iteration.
-
-1. **Build the plugin bundle:**
-   ```bash
-   make bundle
-   ```
-
-2. **Launch the mock stack:**
-   ```bash
-   docker compose -f test/docker-compose.yml up --build -d
-   ```
-
-3. **Execute the test suite:**
-   ```bash
-   # Run full 4-phase lifecycle (admin, demotion, re-promotion, non-admin)
-   python3 test/test-login.py
-
-   # Or test specific persona:
-   python3 test/test-login.py admin
-   python3 test/test-login.py user
-   ```
-
-4. **Tear down:**
-   ```bash
-   docker compose -f test/docker-compose.yml down -v
-   ```
+Both stacks mount the repository's `./dist` directory directly into the Mattermost container at `/dist:ro`, allowing locally compiled plugin bundles to be installed and tested immediately.
 
 ---
 
-## Option B: Real Authentik Instance (Complete E2E Stack)
+## Option A: Mock Authentik (Fast & Lightweight)
 
-Runs against the official `ghcr.io/goauthentik/server` image. Automatically bootstraps an OAuth2/OIDC provider, provisions test users, executes multi-stage authentication flows, verifies RSA JWKS signatures, and exercises the 4-phase admin role synchronization lifecycle.
+Ideal for quick sanity checks, CI pipelines, and rapid development iteration.
 
-1. **Build the plugin bundle:**
+### 1. Build the Plugin Bundle
+Compile the server binaries, webapp assets, and `.tar.gz` bundle:
+```bash
+make bundle
+```
+
+### 2. Launch the Test Containers
+```bash
+docker compose -f test/docker-compose.yml up --build -d
+```
+Wait for Mattermost to become responsive:
+```bash
+curl --retry 15 --retry-delay 2 --retry-connrefused -s http://localhost:8065/api/v4/system/ping
+```
+
+### 3. Deploy the Plugin to the Test Instance
+Mattermost containers run with local mode enabled (`MM_SERVICESETTINGS_ENABLELOCALMODE=true`), allowing direct management via `mmctl --local`:
+
+1. **Create a bootstrap System Admin:**
+   *(Mattermost's core safety guard prevents demoting the "last System Admin". Creating a separate bootstrap admin ensures lifecycle demotion/promotion tests succeed without conflict.)*
    ```bash
-   make bundle
+   docker compose -f test/docker-compose.yml exec mattermost \
+     mmctl --local user create --email root@example.com --username rootadmin --password "RootPassword123!" --system-admin
    ```
 
-2. **Launch the real Authentik stack:**
+2. **Install the plugin bundle from the mounted `/dist` directory:**
    ```bash
-   docker compose -f test/docker-compose.real-authentik.yml up -d
+   docker compose -f test/docker-compose.yml exec mattermost \
+     sh -c 'mmctl --local plugin add /dist/*.tar.gz'
    ```
 
-3. **Execute the end-to-end test suite:**
+3. **Apply the mock test configuration and enable the plugin:**
    ```bash
-   python3 test/test-real-authentik.py
+   docker cp test/plugin-config.json test-mattermost-1:/tmp/config.json
+   docker compose -f test/docker-compose.yml exec mattermost mmctl --local config patch /tmp/config.json
+   docker compose -f test/docker-compose.yml exec mattermost mmctl --local plugin enable io.christopherturner.mattermost-authentik
    ```
 
-4. **Tear down:**
-   ```bash
-   docker compose -f test/docker-compose.real-authentik.yml down -v
-   ```
+### 4. Execute the Test Suite
+```bash
+# Run full 4-phase lifecycle (admin promotion, demotion, re-promotion, standard user):
+python3 test/test-login.py
+
+# Or test a specific persona:
+python3 test/test-login.py admin
+python3 test/test-login.py demoted
+python3 test/test-login.py user
+```
+
+### 5. Tear Down
+```bash
+docker compose -f test/docker-compose.yml down -v
+```
+
+---
+
+## Option B: Real Authentik Instance (Complete Production Stack)
+
+Runs against the official `ghcr.io/goauthentik/server:2026.8.4` image with PostgreSQL and Redis. Tests against live Authentik authorization flows, OIDC auto-discovery, PKCE verification, RSA JWKS key signatures, and live group synchronization.
+
+### 1. Build the Plugin Bundle
+```bash
+make bundle
+```
+
+### 2. Launch the Full Stack
+```bash
+docker compose -f test/docker-compose.real-authentik.yml up -d
+```
+Wait for Authentik and Mattermost services to finish bootstrapping:
+```bash
+# Authentik takes ~45-60s on first run to apply Django schema migrations
+until curl -sf http://localhost:9000/api/v3/root/config/ > /dev/null && curl -sf http://localhost:8065/api/v4/system/ping > /dev/null; do
+  echo "Waiting for Authentik and Mattermost to be ready..."
+  sleep 5
+done
+```
+
+### 3. Deploy the Plugin Bundle
+Install the plugin and create the bootstrap admin:
+```bash
+# 1. Create bootstrap admin
+docker compose -f test/docker-compose.real-authentik.yml exec mattermost \
+  mmctl --local user create --email root@example.com --username rootadmin --password "RootPassword123!" --system-admin
+
+# 2. Install plugin bundle
+docker compose -f test/docker-compose.real-authentik.yml exec mattermost \
+  sh -c 'mmctl --local plugin add /dist/*.tar.gz'
+```
+*(Note: `test/test-real-authentik.py` will automatically configure the Authentik provider/application, patch Mattermost's configuration, and enable the plugin during test execution).*
+
+### 4. Execute the End-to-End Test Suite
+```bash
+python3 test/test-real-authentik.py
+```
+
+### 5. Tear Down
+```bash
+docker compose -f test/docker-compose.real-authentik.yml down -v
+```
+
+---
+
+## Rapid Development Iteration (Re-deploying Changes)
+
+When modifying plugin server or webapp code during active development, you do not need to restart the containers:
+
+```bash
+# 1. Rebuild bundle
+make bundle
+
+# 2. Overwrite plugin in the running Mattermost instance and reload
+docker compose -f test/docker-compose.yml exec mattermost \
+  sh -c 'mmctl --local plugin add /dist/*.tar.gz && mmctl --local plugin disable io.christopherturner.mattermost-authentik && mmctl --local plugin enable io.christopherturner.mattermost-authentik'
+
+# 3. View live plugin logs
+docker compose -f test/docker-compose.yml logs -f mattermost
+```

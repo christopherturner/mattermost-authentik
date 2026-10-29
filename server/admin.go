@@ -17,9 +17,7 @@ import (
 
 // handleGetLDAPUsers lists all active users whose auth_service is set to "ldap".
 func (p *Plugin) handleGetLDAPUsers(w http.ResponseWriter, r *http.Request) {
-	userID := r.Header.Get("Mattermost-User-Id")
-	if userID == "" || !p.isAdmin(userID) {
-		http.Error(w, "Unauthorized: System Administrator permissions required", http.StatusForbidden)
+	if !p.checkAdminAuthorization(w, r) {
 		return
 	}
 
@@ -66,9 +64,7 @@ func (p *Plugin) handleGetLDAPUsers(w http.ResponseWriter, r *http.Request) {
 // This sets auth_service = "" and auth_data = nil, restoring normal email status so they can
 // be edited/deactivated in the GUI or seamlessly linked to Authentik on next login.
 func (p *Plugin) handleUnlockLDAPUsers(w http.ResponseWriter, r *http.Request) {
-	userID := r.Header.Get("Mattermost-User-Id")
-	if userID == "" || !p.isAdmin(userID) {
-		http.Error(w, "Unauthorized", http.StatusForbidden)
+	if !p.checkAdminAuthorization(w, r) {
 		return
 	}
 
@@ -127,9 +123,7 @@ func (p *Plugin) handleUnlockLDAPUsers(w http.ResponseWriter, r *http.Request) {
 
 // handleDeactivateLDAPUsers deactivates LDAP accounts.
 func (p *Plugin) handleDeactivateLDAPUsers(w http.ResponseWriter, r *http.Request) {
-	userID := r.Header.Get("Mattermost-User-Id")
-	if userID == "" || !p.isAdmin(userID) {
-		http.Error(w, "Unauthorized", http.StatusForbidden)
+	if !p.checkAdminAuthorization(w, r) {
 		return
 	}
 
@@ -177,13 +171,24 @@ func (p *Plugin) handleDeactivateLDAPUsers(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-// isAdmin checks if the user has System Admin role.
-func (p *Plugin) isAdmin(userID string) bool {
-	user, err := p.API.GetUser(userID)
-	if err != nil || user == nil {
+// checkAdminAuthorization validates that the request is authenticated and has System Administrator permissions.
+// Returns false if unauthorized (and writes the appropriate HTTP error response).
+func (p *Plugin) checkAdminAuthorization(w http.ResponseWriter, r *http.Request) bool {
+	userID := r.Header.Get("Mattermost-User-Id")
+	if userID == "" {
+		http.Error(w, "Unauthorized: authentication required", http.StatusUnauthorized)
 		return false
 	}
-	return user.IsInRole(model.SystemAdminRoleId)
+	if !p.isAdmin(userID) {
+		http.Error(w, "Forbidden: System Administrator permissions required", http.StatusForbidden)
+		return false
+	}
+	return true
+}
+
+// isAdmin checks if the user has System Administrator permissions.
+func (p *Plugin) isAdmin(userID string) bool {
+	return p.API.HasPermissionTo(userID, model.PermissionManageSystem)
 }
 
 // DiagnosticStep records a step in the connectivity diagnosis.
@@ -206,9 +211,7 @@ type DiagnosticResponse struct {
 
 // handleDiagnoseConnection tests connectivity, OIDC discovery, JWKS retrieval, and credentials.
 func (p *Plugin) handleDiagnoseConnection(w http.ResponseWriter, r *http.Request) {
-	userID := r.Header.Get("Mattermost-User-Id")
-	if userID == "" || !p.isAdmin(userID) {
-		http.Error(w, "Unauthorized", http.StatusForbidden)
+	if !p.checkAdminAuthorization(w, r) {
 		return
 	}
 
