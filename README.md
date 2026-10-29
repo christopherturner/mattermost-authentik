@@ -139,23 +139,25 @@ MM_PLUGINSETTINGS_ENABLEUPLOADS=true
    ```
 2. In Mattermost, go to **System Console** > **Plugins** > **Plugin Management**.
 3. Under **Upload Plugin**, choose the `.tar.gz` bundle and click **Upload**.
-4. In the list of installed plugins, locate **Authentik Authentication** and click **Enable**.
+4. In the list of installed plugins, locate **Authentik for Mattermost** and click **Enable**.
 
 ### Step 2: Configure Plugin Settings
-In the System Console, navigate to **Plugins** > **Authentik Authentication**:
+In the System Console, navigate to **Plugins** > **Authentik for Mattermost** in the left sidebar:
 
 | Setting | Value / Example | Description |
 |---|---|---|
 | **Enable Authentik Authentication** | `true` | Turn the SSO integration on/off. |
+| **Enforce Authentik SSO (Disable Username/Password Sign-In)** | `false` | When enabled, automatically disables standard email/password login across Mattermost so all users must authenticate via Authentik SSO. Make sure you have a working Authentik admin before enabling. |
 | **Authentik Base URL** | `https://authentik.company` | Base URL of your Authentik instance. |
-| **Authentik Application Slug** | `mattermost` | Matches the slug configured in Authentik. |
-| **Custom Issuer URL (Optional)** | *(Leave blank)* | Optional override if using a non-standard OIDC endpoint. |
+| **Authentik Application Slug** | `mattermost` | Matches the slug configured in Authentik (used to discover OIDC endpoints). |
+| **Custom Issuer / Discovery URL (Optional)** | *(Leave blank)* | Optional override if using a non-standard OIDC endpoint. |
 | **Client ID** | *(Paste from Authentik)* | Client ID from the Authentik Provider. |
 | **Client Secret** | *(Paste from Authentik)* | Client Secret from the Authentik Provider. |
-| **Custom Root CA / Certificate** | *(Optional)* | Paste PEM-encoded certificate or specify a certificate file path on the Mattermost server. Tested by the built-in Connection Diagnostic. |
-| **Skip TLS Certificate Verification** | `false` | Disables TLS certificate verification (for development/testing). |
+| **Custom Root CA / Self-Signed Certificate** | *(Optional)* | Paste PEM-encoded certificate or specify a certificate file path on the Mattermost server. Required if Authentik uses a self-signed or internal CA. |
+| **Skip TLS Certificate Verification (Insecure)** | `false` | Disables TLS certificate verification (for development/testing only). |
+| **Test Connection & Credentials** | *(Button)* | Interactive diagnostic tool verifying connectivity, certificates, OIDC discovery, JWKS keys, and Client ID / Secret. |
 | **Scopes** | `openid profile email groups` | OAuth scopes to request (interactive pill selector). `openid`, `profile`, `email`, and `groups` are required. |
-| **Admin Group (Optional)** | `mattermost-admins` | Custom Authentik group name(s). Supports comma-separated groups (e.g. `mattermost-admins, it-ops`). |
+| **Admin Group (Optional)** | `mattermost-admins` | Custom Authentik group name(s). Members automatically receive System Admin in Mattermost. Supports comma-separated groups (e.g. `mattermost-admins, it-ops`). |
 | **Grant System Admin to 'authentik Admins'** | `true` | When enabled, members of Authentik's default `authentik Admins` group automatically receive System Admin in Mattermost. |
 | **Synchronize Admin Role** | `true` | Automatically grant/revoke System Admin on login based on group membership. |
 | **Default Team Handle (Optional)** | `main` | Team handle (e.g. `company` or `engineering`) to auto-join new users. |
@@ -164,6 +166,7 @@ In the System Console, navigate to **Plugins** > **Authentik Authentication**:
 | **Require Verified Email** | `false` | If `true`, rejects login unless Authentik confirms email is verified. |
 | **Login Button Text** | `Log in with Authentik` | Text displayed on the login button. |
 | **Login Button Color** | `#FD4B2D` | Button background color (Authentik brand color). |
+| **Manage Legacy LDAP Accounts** | *(Action buttons)* | Tool to view, unlock, or deactivate leftover LDAP accounts so they can link to Authentik. |
 
 Click **Save**. Users will immediately see the **"Log in with Authentik"** button on the Mattermost login page!
 

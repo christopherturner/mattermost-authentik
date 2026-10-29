@@ -93,7 +93,7 @@ func (p *Plugin) OnActivate() error {
 		}
 	}
 
-	p.API.LogInfo("Authentik Authentication plugin activated successfully")
+	p.API.LogInfo("Authentik for Mattermost plugin activated successfully")
 	return nil
 }
 

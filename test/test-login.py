@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Automated End-to-End Test for Mattermost Authentik Authentication Plugin.
+Automated End-to-End Test for Authentik for Mattermost Plugin.
 Simulates a full browser login session through the OAuth2 / OIDC code flow.
 """
 

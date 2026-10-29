@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced Security modal: added Authentik SSO details, themed badges with configured brand color, and removed hover effect on non-clickable sign-in row.
 - Prevented password field text overflow by removing redundant badge.
 - Corrected default scopes description to `openid profile email groups` and removed `offline_access`.
+- Corrected installation and configuration instructions in `README.md` to direct users to locate **Authentik for Mattermost** in Plugin Management and the System Console sidebar navigation under **Plugins** > **Authentik for Mattermost**.
+- Synchronized configuration settings table in `README.md` with exact display names from `plugin.json` and added entries for `Enforce Authentik SSO`, `Test Connection & Credentials`, and `Manage Legacy LDAP Accounts`.
 
 ## [1.0.0] - 2026-10-18
 
