@@ -215,57 +215,13 @@ func (p *Plugin) handleDiagnoseConnection(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var req struct {
-		AuthentikURL    string `json:"authentik_url"`
-		ApplicationSlug string `json:"application_slug"`
-		IssuerURL       string `json:"issuer_url"`
-		ClientID        string `json:"client_id"`
-		ClientSecret    string `json:"client_secret"`
-		CustomCert      string `json:"custom_cert"`
-		SkipTLSVerify   *bool  `json:"skip_tls_verify"`
-	}
-	_ = json.NewDecoder(r.Body).Decode(&req)
-
 	savedConfig := p.getConfiguration()
 
-	authentikURL := strings.TrimSpace(req.AuthentikURL)
-	if authentikURL == "" {
-		authentikURL = savedConfig.AuthentikURL
-	}
-	slug := strings.TrimSpace(req.ApplicationSlug)
-	if slug == "" {
-		slug = savedConfig.ApplicationSlug
-	}
-	if slug == "" {
-		slug = "mattermost"
-	}
-	issuerURL := strings.TrimSpace(req.IssuerURL)
-	if issuerURL == "" {
-		issuerURL = savedConfig.IssuerURL
-	}
-	clientID := strings.TrimSpace(req.ClientID)
-	if clientID == "" {
-		clientID = savedConfig.ClientID
-	}
-	clientSecret := strings.TrimSpace(req.ClientSecret)
-	if clientSecret == "" {
-		clientSecret = savedConfig.ClientSecret
-	}
-	customCert := strings.TrimSpace(req.CustomCert)
-	if customCert == "" {
-		customCert = savedConfig.CustomCert
-	}
+	effectiveIssuer := savedConfig.GetEffectiveIssuerURL()
+	clientID := strings.TrimSpace(savedConfig.ClientID)
+	clientSecret := strings.TrimSpace(savedConfig.ClientSecret)
+	customCert := strings.TrimSpace(savedConfig.CustomCert)
 	skipTLSVerify := savedConfig.SkipTLSVerify
-	if req.SkipTLSVerify != nil {
-		skipTLSVerify = *req.SkipTLSVerify
-	}
-
-	var effectiveIssuer string
-	if issuerURL != "" {
-		effectiveIssuer = strings.TrimRight(issuerURL, "/")
-	} else if authentikURL != "" {
-		effectiveIssuer = fmt.Sprintf("%s/application/o/%s", strings.TrimRight(authentikURL, "/"), slug)
-	}
 
 	callbackURL := p.getCallbackURL()
 
@@ -276,7 +232,23 @@ func (p *Plugin) handleDiagnoseConnection(w http.ResponseWriter, r *http.Request
 		steps = append(steps, DiagnosticStep{
 			Name:    "Configuration Check",
 			Status:  "error",
-			Details: "Authentik URL or Issuer URL is empty. Please enter your Authentik Base URL or custom Issuer URL.",
+			Details: "Authentik URL or Issuer URL is empty. Please enter your Authentik Base URL or custom Issuer URL in plugin settings.",
+		})
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(DiagnosticResponse{
+			Success:     false,
+			CallbackURL: callbackURL,
+			Steps:       steps,
+		})
+		return
+	}
+
+	parsedIssuer, err := url.Parse(effectiveIssuer)
+	if err != nil || (parsedIssuer.Scheme != "http" && parsedIssuer.Scheme != "https") || parsedIssuer.Host == "" || parsedIssuer.User != nil {
+		steps = append(steps, DiagnosticStep{
+			Name:    "Configuration Check",
+			Status:  "error",
+			Details: fmt.Sprintf("Invalid Authentik or Issuer URL '%s'. Must be a valid HTTP or HTTPS URL.", effectiveIssuer),
 		})
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(DiagnosticResponse{
@@ -295,18 +267,15 @@ func (p *Plugin) handleDiagnoseConnection(w http.ResponseWriter, r *http.Request
 	httpClient.Timeout = 10 * time.Second
 
 	// Step 1: TLS / Certificate Check (tests if a certificate file is needed)
-	certStep := p.checkTLSCertificate(effectiveIssuer, customCert, skipTLSVerify)
+	certStep := p.checkTLSCertificate(parsedIssuer.String(), customCert, skipTLSVerify)
 	steps = append(steps, certStep)
 	if certStep.Status == "error" {
 		overallSuccess = false
 	}
 
 	// Step 2: OpenID Connect Discovery
-	discoveryURL := effectiveIssuer + "/.well-known/openid-configuration"
-	t0 := time.Now()
-	resp, err := httpClient.Get(discoveryURL)
-	latency := time.Since(t0).Milliseconds()
-
+	discoveryURL := parsedIssuer.String() + "/.well-known/openid-configuration"
+	parsedDiscovery, parseErr := url.Parse(discoveryURL)
 	var discoveryDoc struct {
 		Issuer                string   `json:"issuer"`
 		AuthorizationEndpoint string   `json:"authorization_endpoint"`
@@ -316,107 +285,140 @@ func (p *Plugin) handleDiagnoseConnection(w http.ResponseWriter, r *http.Request
 		ScopesSupported       []string `json:"scopes_supported"`
 	}
 
-	if err != nil {
+	if parseErr != nil || (parsedDiscovery.Scheme != "http" && parsedDiscovery.Scheme != "https") || parsedDiscovery.Host != parsedIssuer.Host {
 		overallSuccess = false
 		steps = append(steps, DiagnosticStep{
-			Name:      "OIDC Discovery",
-			Status:    "error",
-			URL:       discoveryURL,
-			LatencyMs: latency,
-			Details:   fmt.Sprintf("Failed to reach discovery endpoint: %v. Check network connectivity, DNS, or firewall between Mattermost and Authentik.", err),
+			Name:    "OIDC Discovery",
+			Status:  "error",
+			URL:     discoveryURL,
+			Details: fmt.Sprintf("Invalid discovery URL '%s'", discoveryURL),
 		})
 	} else {
-		defer resp.Body.Close()
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		if resp.StatusCode != http.StatusOK {
+		t0 := time.Now()
+		resp, err := httpClient.Get(parsedDiscovery.String())
+		latency := time.Since(t0).Milliseconds()
+
+		if err != nil {
 			overallSuccess = false
 			steps = append(steps, DiagnosticStep{
 				Name:      "OIDC Discovery",
 				Status:    "error",
 				URL:       discoveryURL,
 				LatencyMs: latency,
-				Details:   fmt.Sprintf("Authentik returned HTTP %d on discovery endpoint. Response: %s", resp.StatusCode, string(bodyBytes)),
-			})
-		} else if parseErr := json.Unmarshal(bodyBytes, &discoveryDoc); parseErr != nil {
-			overallSuccess = false
-			steps = append(steps, DiagnosticStep{
-				Name:      "OIDC Discovery",
-				Status:    "error",
-				URL:       discoveryURL,
-				LatencyMs: latency,
-				Details:   fmt.Sprintf("Discovery response was not valid JSON: %v", parseErr),
+				Details:   fmt.Sprintf("Failed to reach discovery endpoint: %v. Check network connectivity, DNS, or firewall between Mattermost and Authentik.", err),
 			})
 		} else {
-			steps = append(steps, DiagnosticStep{
-				Name:      "OIDC Discovery",
-				Status:    "ok",
-				URL:       discoveryURL,
-				LatencyMs: latency,
-				Details:   fmt.Sprintf("Valid OIDC configuration found. Issuer: '%s'", discoveryDoc.Issuer),
-			})
+			defer resp.Body.Close()
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			if resp.StatusCode != http.StatusOK {
+				overallSuccess = false
+				steps = append(steps, DiagnosticStep{
+					Name:      "OIDC Discovery",
+					Status:    "error",
+					URL:       discoveryURL,
+					LatencyMs: latency,
+					Details:   fmt.Sprintf("Authentik returned HTTP %d on discovery endpoint. Response: %s", resp.StatusCode, string(bodyBytes)),
+				})
+			} else if parseErr := json.Unmarshal(bodyBytes, &discoveryDoc); parseErr != nil {
+				overallSuccess = false
+				steps = append(steps, DiagnosticStep{
+					Name:      "OIDC Discovery",
+					Status:    "error",
+					URL:       discoveryURL,
+					LatencyMs: latency,
+					Details:   fmt.Sprintf("Discovery response was not valid JSON: %v", parseErr),
+				})
+			} else {
+				steps = append(steps, DiagnosticStep{
+					Name:      "OIDC Discovery",
+					Status:    "ok",
+					URL:       discoveryURL,
+					LatencyMs: latency,
+					Details:   fmt.Sprintf("Valid OIDC configuration found. Issuer: '%s'", discoveryDoc.Issuer),
+				})
+			}
 		}
 	}
 
 	// Step 3: JWKS Keys Verification
-	jwksURL := discoveryDoc.JwksURI
-	if jwksURL == "" && effectiveIssuer != "" {
-		jwksURL = effectiveIssuer + "/jwks/"
+	jwksURL := strings.TrimSpace(discoveryDoc.JwksURI)
+	if jwksURL == "" && overallSuccess {
+		jwksURL = parsedIssuer.String() + "/jwks/"
 	}
 
 	if jwksURL != "" && overallSuccess {
-		t0 = time.Now()
-		jwksResp, jwksErr := httpClient.Get(jwksURL)
-		jwksLatency := time.Since(t0).Milliseconds()
-
-		if jwksErr != nil {
+		parsedJWKS, parseErr := url.Parse(jwksURL)
+		if parseErr != nil || (parsedJWKS.Scheme != "http" && parsedJWKS.Scheme != "https") || parsedJWKS.Host == "" || parsedJWKS.User != nil {
 			overallSuccess = false
 			steps = append(steps, DiagnosticStep{
-				Name:      "JWKS Cryptographic Keys",
-				Status:    "error",
-				URL:       jwksURL,
-				LatencyMs: jwksLatency,
-				Details:   fmt.Sprintf("Failed to fetch signing keys from %s: %v", jwksURL, jwksErr),
+				Name:    "JWKS Cryptographic Keys",
+				Status:  "error",
+				URL:     jwksURL,
+				Details: fmt.Sprintf("Invalid JWKS endpoint URL '%s': must be a valid HTTP or HTTPS URL", jwksURL),
+			})
+		} else if !strings.EqualFold(parsedJWKS.Hostname(), parsedIssuer.Hostname()) {
+			overallSuccess = false
+			steps = append(steps, DiagnosticStep{
+				Name:    "JWKS Cryptographic Keys",
+				Status:  "error",
+				URL:     jwksURL,
+				Details: fmt.Sprintf("JWKS endpoint host '%s' does not match issuer host '%s'", parsedJWKS.Hostname(), parsedIssuer.Hostname()),
 			})
 		} else {
-			defer jwksResp.Body.Close()
-			bodyBytes, _ := io.ReadAll(jwksResp.Body)
-			var jwksDoc struct {
-				Keys []interface{} `json:"keys"`
-			}
-			if jwksResp.StatusCode != http.StatusOK {
+			t0 := time.Now()
+			jwksResp, jwksErr := httpClient.Get(parsedJWKS.String())
+			jwksLatency := time.Since(t0).Milliseconds()
+
+			if jwksErr != nil {
 				overallSuccess = false
 				steps = append(steps, DiagnosticStep{
 					Name:      "JWKS Cryptographic Keys",
 					Status:    "error",
-					URL:       jwksURL,
+					URL:       parsedJWKS.String(),
 					LatencyMs: jwksLatency,
-					Details:   fmt.Sprintf("HTTP %d when fetching JWKS keys: %s", jwksResp.StatusCode, string(bodyBytes)),
-				})
-			} else if parseErr := json.Unmarshal(bodyBytes, &jwksDoc); parseErr != nil {
-				overallSuccess = false
-				steps = append(steps, DiagnosticStep{
-					Name:      "JWKS Cryptographic Keys",
-					Status:    "error",
-					URL:       jwksURL,
-					LatencyMs: jwksLatency,
-					Details:   fmt.Sprintf("Invalid JSON in JWKS keys response: %v", parseErr),
+					Details:   fmt.Sprintf("Failed to fetch signing keys from %s: %v", parsedJWKS.String(), jwksErr),
 				})
 			} else {
-				steps = append(steps, DiagnosticStep{
-					Name:      "JWKS Cryptographic Keys",
-					Status:    "ok",
-					URL:       jwksURL,
-					LatencyMs: jwksLatency,
-					Details:   fmt.Sprintf("Retrieved %d public signing key(s) from Authentik.", len(jwksDoc.Keys)),
-				})
+				defer jwksResp.Body.Close()
+				bodyBytes, _ := io.ReadAll(jwksResp.Body)
+				var jwksDoc struct {
+					Keys []interface{} `json:"keys"`
+				}
+				if jwksResp.StatusCode != http.StatusOK {
+					overallSuccess = false
+					steps = append(steps, DiagnosticStep{
+						Name:      "JWKS Cryptographic Keys",
+						Status:    "error",
+						URL:       parsedJWKS.String(),
+						LatencyMs: jwksLatency,
+						Details:   fmt.Sprintf("HTTP %d when fetching JWKS keys: %s", jwksResp.StatusCode, string(bodyBytes)),
+					})
+				} else if parseErr := json.Unmarshal(bodyBytes, &jwksDoc); parseErr != nil {
+					overallSuccess = false
+					steps = append(steps, DiagnosticStep{
+						Name:      "JWKS Cryptographic Keys",
+						Status:    "error",
+						URL:       parsedJWKS.String(),
+						LatencyMs: jwksLatency,
+						Details:   fmt.Sprintf("Invalid JSON in JWKS keys response: %v", parseErr),
+					})
+				} else {
+					steps = append(steps, DiagnosticStep{
+						Name:      "JWKS Cryptographic Keys",
+						Status:    "ok",
+						URL:       parsedJWKS.String(),
+						LatencyMs: jwksLatency,
+						Details:   fmt.Sprintf("Retrieved %d public signing key(s) from Authentik.", len(jwksDoc.Keys)),
+					})
+				}
 			}
 		}
 	}
 
 	// Step 4: Client Credentials & Token Endpoint Validation
-	tokenURL := discoveryDoc.TokenEndpoint
-	if tokenURL == "" && effectiveIssuer != "" {
-		tokenURL = effectiveIssuer + "/token/"
+	tokenURL := strings.TrimSpace(discoveryDoc.TokenEndpoint)
+	if tokenURL == "" && overallSuccess {
+		tokenURL = parsedIssuer.String() + "/token/"
 	}
 
 	if clientID == "" || clientSecret == "" {
@@ -426,66 +428,95 @@ func (p *Plugin) handleDiagnoseConnection(w http.ResponseWriter, r *http.Request
 			Details: "Client ID or Client Secret not provided. Skipped credentials verification.",
 		})
 	} else if tokenURL != "" {
-		t0 = time.Now()
-		form := url.Values{}
-		form.Set("grant_type", "client_credentials")
-
-		tokenReq, _ := http.NewRequest(http.MethodPost, tokenURL, strings.NewReader(form.Encode()))
-		tokenReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		tokenReq.SetBasicAuth(clientID, clientSecret)
-
-		tokenResp, tokenErr := httpClient.Do(tokenReq)
-		tokenLatency := time.Since(t0).Milliseconds()
-
-		if tokenErr != nil {
+		parsedToken, parseErr := url.Parse(tokenURL)
+		if parseErr != nil || (parsedToken.Scheme != "http" && parsedToken.Scheme != "https") || parsedToken.Host == "" || parsedToken.User != nil {
 			overallSuccess = false
 			steps = append(steps, DiagnosticStep{
-				Name:      "Client ID & Secret Credentials",
-				Status:    "error",
-				URL:       tokenURL,
-				LatencyMs: tokenLatency,
-				Details:   fmt.Sprintf("Failed to contact token endpoint at %s: %v", tokenURL, tokenErr),
+				Name:    "Client ID & Secret Credentials",
+				Status:  "error",
+				URL:     tokenURL,
+				Details: fmt.Sprintf("Invalid token endpoint URL '%s': must be a valid HTTP or HTTPS URL", tokenURL),
+			})
+		} else if !strings.EqualFold(parsedToken.Hostname(), parsedIssuer.Hostname()) {
+			overallSuccess = false
+			steps = append(steps, DiagnosticStep{
+				Name:    "Client ID & Secret Credentials",
+				Status:  "error",
+				URL:     tokenURL,
+				Details: fmt.Sprintf("Token endpoint host '%s' does not match issuer host '%s'", parsedToken.Hostname(), parsedIssuer.Hostname()),
 			})
 		} else {
-			defer tokenResp.Body.Close()
-			bodyBytes, _ := io.ReadAll(tokenResp.Body)
-			bodyStr := string(bodyBytes)
+			t0 := time.Now()
+			form := url.Values{}
+			form.Set("grant_type", "client_credentials")
 
-			if tokenResp.StatusCode == http.StatusOK {
-				steps = append(steps, DiagnosticStep{
-					Name:      "Client ID & Secret Credentials",
-					Status:    "ok",
-					URL:       tokenURL,
-					LatencyMs: tokenLatency,
-					Details:   "Client ID and Client Secret successfully verified against Authentik token endpoint.",
-				})
-			} else if tokenResp.StatusCode == http.StatusUnauthorized {
+			tokenReq, tokenReqErr := http.NewRequest(http.MethodPost, parsedToken.String(), strings.NewReader(form.Encode()))
+			if tokenReqErr != nil {
 				overallSuccess = false
 				steps = append(steps, DiagnosticStep{
-					Name:      "Client ID & Secret Credentials",
-					Status:    "error",
-					URL:       tokenURL,
-					LatencyMs: tokenLatency,
-					Details:   "Authentication failed (HTTP 401): Client ID or Client Secret rejected by Authentik. Please double check credentials.",
-				})
-			} else if strings.Contains(bodyStr, "invalid_client") {
-				overallSuccess = false
-				steps = append(steps, DiagnosticStep{
-					Name:      "Client ID & Secret Credentials",
-					Status:    "error",
-					URL:       tokenURL,
-					LatencyMs: tokenLatency,
-					Details:   "Authentik rejected client credentials: 'invalid_client'. Check Client ID and Secret in your Authentik Provider.",
+					Name:    "Client ID & Secret Credentials",
+					Status:  "error",
+					URL:     parsedToken.String(),
+					Details: fmt.Sprintf("Failed to construct token request: %v", tokenReqErr),
 				})
 			} else {
-				// Token endpoint is reachable and Authentik processed the request without rejecting credentials
-				steps = append(steps, DiagnosticStep{
-					Name:      "Client ID & Secret Credentials",
-					Status:    "ok",
-					URL:       tokenURL,
-					LatencyMs: tokenLatency,
-					Details:   "Authentik token endpoint reachable and responsive.",
-				})
+				tokenReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				tokenReq.SetBasicAuth(clientID, clientSecret)
+
+				tokenResp, tokenErr := httpClient.Do(tokenReq)
+				tokenLatency := time.Since(t0).Milliseconds()
+
+				if tokenErr != nil {
+					overallSuccess = false
+					steps = append(steps, DiagnosticStep{
+						Name:      "Client ID & Secret Credentials",
+						Status:    "error",
+						URL:       parsedToken.String(),
+						LatencyMs: tokenLatency,
+						Details:   fmt.Sprintf("Failed to contact token endpoint at %s: %v", parsedToken.String(), tokenErr),
+					})
+				} else {
+					defer tokenResp.Body.Close()
+					bodyBytes, _ := io.ReadAll(tokenResp.Body)
+					bodyStr := string(bodyBytes)
+
+					if tokenResp.StatusCode == http.StatusOK {
+						steps = append(steps, DiagnosticStep{
+							Name:      "Client ID & Secret Credentials",
+							Status:    "ok",
+							URL:       parsedToken.String(),
+							LatencyMs: tokenLatency,
+							Details:   "Client ID and Client Secret successfully verified against Authentik token endpoint.",
+						})
+					} else if tokenResp.StatusCode == http.StatusUnauthorized {
+						overallSuccess = false
+						steps = append(steps, DiagnosticStep{
+							Name:      "Client ID & Secret Credentials",
+							Status:    "error",
+							URL:       parsedToken.String(),
+							LatencyMs: tokenLatency,
+							Details:   "Authentication failed (HTTP 401): Client ID or Client Secret rejected by Authentik. Please double check credentials.",
+						})
+					} else if strings.Contains(bodyStr, "invalid_client") {
+						overallSuccess = false
+						steps = append(steps, DiagnosticStep{
+							Name:      "Client ID & Secret Credentials",
+							Status:    "error",
+							URL:       parsedToken.String(),
+							LatencyMs: tokenLatency,
+							Details:   "Authentik rejected client credentials: 'invalid_client'. Check Client ID and Secret in your Authentik Provider.",
+						})
+					} else {
+						// Token endpoint is reachable and Authentik processed the request without rejecting credentials
+						steps = append(steps, DiagnosticStep{
+							Name:      "Client ID & Secret Credentials",
+							Status:    "ok",
+							URL:       parsedToken.String(),
+							LatencyMs: tokenLatency,
+							Details:   "Authentik token endpoint reachable and responsive.",
+						})
+					}
+				}
 			}
 		}
 	}

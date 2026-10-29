@@ -20,6 +20,12 @@ import (
 func setupTestPluginWithAPI() (*Plugin, *plugintest.API) {
 	p := &Plugin{}
 	api := &plugintest.API{}
+	siteURL := "http://mattermost.example.com"
+	api.On("GetConfig").Return(&model.Config{
+		ServiceSettings: model.ServiceSettings{
+			SiteURL: &siteURL,
+		},
+	}).Maybe()
 	p.SetAPI(api)
 	p.setupRouter()
 	return p, api
@@ -198,5 +204,151 @@ func TestCheckTLSCertificate(t *testing.T) {
 			assert.Equal(t, "error", step.Status)
 			assert.Contains(t, step.Details, "verification still failed")
 		})
+	})
+}
+
+func TestHandleDiagnoseConnection(t *testing.T) {
+	t.Run("empty configuration returns error step", func(t *testing.T) {
+		p, api := setupTestPluginWithAPI()
+		api.On("HasPermissionTo", "admin-user-id", model.PermissionManageSystem).Return(true)
+		p.setConfiguration(&Configuration{})
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/diagnose", strings.NewReader("{}"))
+		req.Header.Set("Mattermost-User-Id", "admin-user-id")
+		w := httptest.NewRecorder()
+
+		p.router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var resp DiagnosticResponse
+		err := json.NewDecoder(w.Body).Decode(&resp)
+		require.NoError(t, err)
+		assert.False(t, resp.Success)
+		require.NotEmpty(t, resp.Steps)
+		assert.Equal(t, "Configuration Check", resp.Steps[0].Name)
+		assert.Equal(t, "error", resp.Steps[0].Status)
+	})
+
+	t.Run("invalid issuer URL returns error step", func(t *testing.T) {
+		p, api := setupTestPluginWithAPI()
+		api.On("HasPermissionTo", "admin-user-id", model.PermissionManageSystem).Return(true)
+		p.setConfiguration(&Configuration{
+			IssuerURL: "ftp://invalid-scheme.example.com",
+		})
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/diagnose", strings.NewReader("{}"))
+		req.Header.Set("Mattermost-User-Id", "admin-user-id")
+		w := httptest.NewRecorder()
+
+		p.router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var resp DiagnosticResponse
+		err := json.NewDecoder(w.Body).Decode(&resp)
+		require.NoError(t, err)
+		assert.False(t, resp.Success)
+		assert.Equal(t, "Configuration Check", resp.Steps[0].Name)
+		assert.Equal(t, "error", resp.Steps[0].Status)
+	})
+
+	t.Run("rejects mismatched JWKS host (SSRF prevention)", func(t *testing.T) {
+		mockOIDC := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/.well-known/openid-configuration" {
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					"issuer":         "http://example.com",
+					"jwks_uri":       "http://169.254.169.254/latest/meta-data/",
+					"token_endpoint": "http://169.254.169.254/token",
+				})
+				return
+			}
+			w.WriteHeader(http.StatusNotFound)
+		}))
+		defer mockOIDC.Close()
+
+		p, api := setupTestPluginWithAPI()
+		api.On("HasPermissionTo", "admin-user-id", model.PermissionManageSystem).Return(true)
+		p.setConfiguration(&Configuration{
+			IssuerURL:    mockOIDC.URL,
+			ClientID:     "client-id",
+			ClientSecret: "client-secret",
+		})
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/diagnose", strings.NewReader("{}"))
+		req.Header.Set("Mattermost-User-Id", "admin-user-id")
+		w := httptest.NewRecorder()
+
+		p.router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var resp DiagnosticResponse
+		err := json.NewDecoder(w.Body).Decode(&resp)
+		require.NoError(t, err)
+		assert.False(t, resp.Success)
+
+		var jwksStep *DiagnosticStep
+		for i := range resp.Steps {
+			if resp.Steps[i].Name == "JWKS Cryptographic Keys" {
+				jwksStep = &resp.Steps[i]
+				break
+			}
+		}
+		require.NotNil(t, jwksStep)
+		assert.Equal(t, "error", jwksStep.Status)
+		assert.Contains(t, jwksStep.Details, "does not match issuer host")
+	})
+
+	t.Run("successful full diagnostic", func(t *testing.T) {
+		var mockOIDC *httptest.Server
+		mockOIDC = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/application/o/mattermost/.well-known/openid-configuration":
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					"issuer":           mockOIDC.URL + "/application/o/mattermost",
+					"jwks_uri":         mockOIDC.URL + "/application/o/mattermost/jwks/",
+					"token_endpoint":   mockOIDC.URL + "/application/o/mattermost/token/",
+					"scopes_supported": []string{"openid", "profile", "email"},
+				})
+			case "/application/o/mattermost/jwks/":
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					"keys": []map[string]interface{}{
+						{"kty": "RSA", "kid": "key-1"},
+					},
+				})
+			case "/application/o/mattermost/token/":
+				w.WriteHeader(http.StatusOK)
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					"access_token": "mock-token",
+					"token_type":   "Bearer",
+				})
+			default:
+				w.WriteHeader(http.StatusNotFound)
+			}
+		}))
+		defer mockOIDC.Close()
+
+		p, api := setupTestPluginWithAPI()
+		api.On("HasPermissionTo", "admin-user-id", model.PermissionManageSystem).Return(true)
+		p.setConfiguration(&Configuration{
+			AuthentikURL:    mockOIDC.URL,
+			ApplicationSlug: "mattermost",
+			ClientID:        "client-id",
+			ClientSecret:    "client-secret",
+		})
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/diagnose", strings.NewReader("{}"))
+		req.Header.Set("Mattermost-User-Id", "admin-user-id")
+		w := httptest.NewRecorder()
+
+		p.router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var resp DiagnosticResponse
+		err := json.NewDecoder(w.Body).Decode(&resp)
+		require.NoError(t, err)
+		assert.True(t, resp.Success)
+		assert.Len(t, resp.Steps, 4) // TLS, Discovery, JWKS, Token
+		for _, s := range resp.Steps {
+			assert.Equal(t, "ok", s.Status)
+		}
 	})
 }
