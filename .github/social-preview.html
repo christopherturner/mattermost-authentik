@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    width: 1280px;
+    height: 640px;
+    background-color: #0b110e;
+    background-image: 
+      linear-gradient(to right, rgba(16, 185, 129, 0.07) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(16, 185, 129, 0.07) 1px, transparent 1px);
+    background-size: 40px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  .card {
+    width: 1140px;
+    height: 500px;
+    background: #0c2018;
+    border: 1.5px solid #164432;
+    border-radius: 24px;
+    box-shadow: 
+      0 25px 50px -12px rgba(0, 0, 0, 0.7),
+      0 0 35px rgba(16, 185, 129, 0.03);
+    padding: 72px 76px 56px 76px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .main-content {
+    display: flex;
+    flex-direction: column;
+    margin-top: 8px;
+  }
+
+  .title {
+    color: #ffffff;
+    font-size: 70px;
+    font-weight: 750;
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+  }
+
+  .subtitle {
+    color: #10b981;
+    font-size: 32px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    margin-top: 16px;
+  }
+
+  .url {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    font-weight: 500;
+    color: #7aa2b8;
+    margin-top: 20px;
+    letter-spacing: -0.01em;
+  }
+
+  .divider {
+    width: 100%;
+    height: 1px;
+    background-color: #123628;
+    margin-bottom: 28px;
+  }
+
+  .footer {
+    display: flex;
+    align-items: center;
+  }
+
+  .badges {
+    display: flex;
+    gap: 16px;
+  }
+
+  .badge {
+    background: #081a13;
+    border: 1.5px solid #164432;
+    border-radius: 10px;
+    padding: 12px 24px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 17px;
+    font-weight: 600;
+    color: #10b981;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    letter-spacing: -0.01em;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="main-content">
+      <h1 class="title">Authentik for Mattermost</h1>
+      <div class="subtitle">OpenID Connect (OIDC) Single Sign-On Plugin</div>
+      <div class="url">https://mattermost-authentik.christopherturner.io/</div>
+    </div>
+
+    <div>
+      <div class="divider"></div>
+      <div class="footer">
+        <div class="badges">
+          <div class="badge">Mattermost v10 - v12 (Team &amp; Enterprise)</div>
+          <div class="badge">Authentik 2026.8+</div>
+          <div class="badge">OIDC SSO</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

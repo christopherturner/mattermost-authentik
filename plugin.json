@@ -2,10 +2,10 @@
     "id": "io.christopherturner.mattermost-authentik",
     "name": "Authentik for Mattermost",
     "description": "OpenID Connect (OIDC) Single Sign-On via Authentik for Mattermost Team Edition and Enterprise.",
-    "homepage_url": "https://christopherturner.io",
-    "support_url": "https://christopherturner.io",
+    "homepage_url": "https://mattermost-authentik.christopherturner.io/",
+    "support_url": "https://github.com/christopherturner/mattermost-authentik",
     "icon_path": "assets/authentik-icon.svg",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "min_server_version": "10.5.0",
     "server": {
         "executables": {

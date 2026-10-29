@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800&amp;family=JetBrains+Mono:wght@500;600&amp;display=swap');
+      .title { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 70px; font-weight: 800; fill: #ffffff; letter-spacing: -0.025em; }
+      .subtitle { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; font-size: 32px; font-weight: 500; fill: #10b981; letter-spacing: -0.01em; }
+      .url-text { font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 500; fill: #7aa2b8; letter-spacing: -0.01em; }
+      .badge-text { font-family: 'JetBrains Mono', monospace; font-size: 17px; font-weight: 600; fill: #10b981; letter-spacing: -0.01em; }
+    </style>
+
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(16, 185, 129, 0.07)" stroke-width="1"/>
+    </pattern>
+
+    <filter id="cardShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="25" stdDeviation="25" flood-color="#000000" flood-opacity="0.7"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1280" height="640" fill="#0b110e"/>
+  <rect width="1280" height="640" fill="url(#grid)"/>
+
+  <!-- Card -->
+  <rect x="70" y="70" width="1140" height="500" rx="24" fill="#0c2018" stroke="#164432" stroke-width="1.5" filter="url(#cardShadow)"/>
+
+  <!-- Main Content -->
+  <text x="146" y="214" class="title">Authentik for Mattermost</text>
+  <text x="146" y="262" class="subtitle">OpenID Connect (OIDC) Single Sign-On Plugin</text>
+  <text x="146" y="306" class="url-text">https://mattermost-authentik.christopherturner.io/</text>
+
+  <!-- Divider -->
+  <line x1="146" y1="416" x2="1134" y2="416" stroke="#123628" stroke-width="1"/>
+
+  <!-- Badges -->
+  <!-- Badge 1: Mattermost v10 - v12 (Team & Enterprise) -->
+  <rect x="146" y="440" width="448" height="46" rx="10" fill="#081a13" stroke="#164432" stroke-width="1.5"/>
+  <text x="170" y="469" class="badge-text">Mattermost v10 - v12 (Team &amp; Enterprise)</text>
+
+  <!-- Badge 2: Authentik 2026.8+ -->
+  <rect x="610" y="440" width="214" height="46" rx="10" fill="#081a13" stroke="#164432" stroke-width="1.5"/>
+  <text x="634" y="469" class="badge-text">Authentik 2026.8+</text>
+
+  <!-- Badge 3: OIDC SSO -->
+  <rect x="840" y="440" width="132" height="46" rx="10" fill="#081a13" stroke="#164432" stroke-width="1.5"/>
+  <text x="864" y="469" class="badge-text">OIDC SSO</text>
+</svg>

@@ -1,5 +1,6 @@
 title: Authentik for Mattermost
 description: OpenID Connect (OIDC) Single Sign-On plugin for Mattermost integrating directly with Authentik.
+url: "https://mattermost-authentik.christopherturner.io"
 theme: jekyll-theme-primer
 
 exclude:
