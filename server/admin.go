@@ -585,27 +585,18 @@ func (p *Plugin) checkTLSCertificate(targetURL string, customCert string, skipTL
 		}
 	}
 
-	// 2. System verification failed. Connect insecurely to inspect peer certificates for diagnostic details.
-	var peerInfo string
-	insecureConn, dialErr := tls.DialWithDialer(dialer, "tcp", host, &tls.Config{
-		ServerName:         u.Hostname(),
-		InsecureSkipVerify: true, //nolint:gosec
-	})
+	// 2. System verification failed. Check underlying TCP connectivity to distinguish network vs certificate failure.
+	tcpConn, dialErr := dialer.Dial("tcp", host)
 	if dialErr != nil {
 		return DiagnosticStep{
 			Name:      "TLS / SSL Certificate",
 			Status:    "error",
 			URL:       targetURL,
 			LatencyMs: latency,
-			Details:   fmt.Sprintf("Failed to establish TCP/TLS connection to %s: %v. Check network connectivity and port.", host, dialErr),
+			Details:   fmt.Sprintf("Failed to establish TCP connection to %s: %v. Check network connectivity and port.", host, dialErr),
 		}
 	}
-	defer insecureConn.Close()
-	state := insecureConn.ConnectionState()
-	if len(state.PeerCertificates) > 0 {
-		peer := state.PeerCertificates[0]
-		peerInfo = fmt.Sprintf(" (Subject: '%s', Issuer: '%s')", peer.Subject.CommonName, peer.Issuer.CommonName)
-	}
+	_ = tcpConn.Close()
 
 	// 3. If custom certificate is configured, test if it resolves the verification failure
 	if strings.TrimSpace(customCert) != "" {
@@ -641,7 +632,7 @@ func (p *Plugin) checkTLSCertificate(targetURL string, customCert string, skipTL
 				Status:    "ok",
 				URL:       targetURL,
 				LatencyMs: latency,
-				Details:   "Server uses a private or self-signed certificate" + peerInfo + ". Custom certificate file is configured and successfully verified the connection.",
+				Details:   "Server uses a private or self-signed certificate. Custom certificate file is configured and successfully verified the connection.",
 			}
 		}
 
@@ -650,7 +641,7 @@ func (p *Plugin) checkTLSCertificate(targetURL string, customCert string, skipTL
 			Status:    "error",
 			URL:       targetURL,
 			LatencyMs: latency,
-			Details:   fmt.Sprintf("A custom certificate is configured, but verification still failed: %v%s. Check that the certificate file matches Authentik's CA.", customErr, peerInfo),
+			Details:   fmt.Sprintf("A custom certificate is configured, but verification still failed: %v. Check that the certificate file matches Authentik's CA.", customErr),
 		}
 	}
 
@@ -661,7 +652,7 @@ func (p *Plugin) checkTLSCertificate(targetURL string, customCert string, skipTL
 			Status:    "warning",
 			URL:       targetURL,
 			LatencyMs: latency,
-			Details:   fmt.Sprintf("A certificate file IS needed for secure verification: server certificate is untrusted%s (%v). 'Skip TLS Certificate Verification' is currently bypassing validation.", peerInfo, sysErr),
+			Details:   fmt.Sprintf("A certificate file IS needed for secure verification: server certificate is untrusted (%v). 'Skip TLS Certificate Verification' is currently bypassing validation.", sysErr),
 		}
 	}
 
@@ -670,6 +661,6 @@ func (p *Plugin) checkTLSCertificate(targetURL string, customCert string, skipTL
 		Status:    "error",
 		URL:       targetURL,
 		LatencyMs: latency,
-		Details:   fmt.Sprintf("A custom certificate file IS needed! The server presented an untrusted certificate%s (%v). Upload or paste the Root CA certificate file into 'Custom Root CA' or enable 'Skip TLS Verification'.", peerInfo, sysErr),
+		Details:   fmt.Sprintf("A custom certificate file IS needed! The server presented an untrusted certificate (%v). Upload or paste the Root CA certificate file into 'Custom Root CA' or enable 'Skip TLS Verification'.", sysErr),
 	}
 }

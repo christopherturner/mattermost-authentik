@@ -166,6 +166,28 @@ func TestConfigurationValidation(t *testing.T) {
 		assert.Error(t, cfg.IsValid())
 	})
 
+	t.Run("path traversal in certificate file path fails", func(t *testing.T) {
+		cfg := &Configuration{
+			Enable:       true,
+			AuthentikURL: "https://auth.example.com",
+			ClientID:     "client-123",
+			ClientSecret: "secret-456",
+			CustomCert:   "../../etc/ssl/certs/ca.crt",
+		}
+		assert.Error(t, cfg.IsValid())
+	})
+
+	t.Run("certificate file without valid extension fails", func(t *testing.T) {
+		cfg := &Configuration{
+			Enable:       true,
+			AuthentikURL: "https://auth.example.com",
+			ClientID:     "client-123",
+			ClientSecret: "secret-456",
+			CustomCert:   "/etc/passwd",
+		}
+		assert.Error(t, cfg.IsValid())
+	})
+
 	t.Run("empty custom cert is allowed", func(t *testing.T) {
 		cfg := &Configuration{
 			Enable:        true,

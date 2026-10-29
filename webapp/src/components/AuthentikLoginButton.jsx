@@ -3,6 +3,29 @@ import AuthentikIcon from './AuthentikIcon';
 
 const PLUGIN_ID = 'io.christopherturner.mattermost-authentik';
 
+function getSafeRedirectPath() {
+    try {
+        const raw = new URLSearchParams(window.location.search).get('redirect_to');
+        if (!raw) {
+            return '/';
+        }
+        const parsed = new URL(raw, window.location.origin);
+        if (parsed.origin !== window.location.origin) {
+            return '/';
+        }
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            return '/';
+        }
+        const safePath = parsed.pathname + parsed.search + parsed.hash;
+        if (!safePath.startsWith('/') || safePath.startsWith('//') || safePath.includes('\\')) {
+            return '/';
+        }
+        return safePath;
+    } catch {
+        return '/';
+    }
+}
+
 export default function AuthentikLoginButton() {
     const [config, setConfig] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -35,11 +58,8 @@ export default function AuthentikLoginButton() {
     useEffect(() => {
         const onStorage = (e) => {
             if (e.key === 'mattermost_authentik_login' && e.newValue) {
-                let returnTo = new URLSearchParams(window.location.search).get('redirect_to') || '/';
-                if (!returnTo.startsWith('/') || returnTo.startsWith('//') || returnTo.includes('\\')) {
-                    returnTo = '/';
-                }
-                window.location.assign(returnTo);
+                const safePath = getSafeRedirectPath();
+                window.location.assign(safePath);
             }
         };
 
@@ -52,7 +72,7 @@ export default function AuthentikLoginButton() {
     }
 
     const handleClick = () => {
-        const returnTo = new URLSearchParams(window.location.search).get('redirect_to') || '/';
+        const returnTo = getSafeRedirectPath();
         const base = `/plugins/${PLUGIN_ID}/oauth2/connect?return_to=${encodeURIComponent(returnTo)}`;
 
         // Check if running inside Mattermost Desktop app (Electron)

@@ -1,0 +1,17 @@
+{
+  "PluginSettings": {
+    "Plugins": {
+      "io.christopherturner.mattermost-authentik": {
+        "enable": true,
+        "authentikurl": "http://localhost:9000",
+        "applicationslug": "mattermost",
+        "clientid": "mattermost-real-client-id",
+        "clientsecret": "mattermost-real-client-secret",
+        "admingroup": "mattermost-admins",
+        "grantauthentikadmins": true,
+        "syncadminrole": true,
+        "scope": "openid profile email groups"
+      }
+    }
+  }
+}

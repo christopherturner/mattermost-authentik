@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -125,16 +126,28 @@ func loadCertPEM(certInput string) ([]byte, error) {
 	if strings.Contains(trimmed, "-----BEGIN CERTIFICATE-----") {
 		return []byte(trimmed), nil
 	}
-	// Attempt to read as a file path
-	data, err := os.ReadFile(trimmed)
+
+	// Validate file path to prevent path traversal and arbitrary file access
+	cleanPath := filepath.Clean(trimmed)
+	if strings.Contains(cleanPath, "..") {
+		return nil, fmt.Errorf("path traversal not allowed in certificate path: '%s'", trimmed)
+	}
+
+	ext := strings.ToLower(filepath.Ext(cleanPath))
+	if ext != ".crt" && ext != ".pem" && ext != ".cer" && ext != ".ca-bundle" {
+		return nil, fmt.Errorf("certificate file must have a valid certificate extension (.crt, .pem, .cer, .ca-bundle): '%s'", trimmed)
+	}
+
+	// Attempt to read certificate from verified file path
+	data, err := os.ReadFile(cleanPath)
 	if err == nil && len(data) > 0 {
 		if strings.Contains(string(data), "-----BEGIN CERTIFICATE-----") {
 			return data, nil
 		}
-		return nil, fmt.Errorf("file '%s' does not contain valid PEM certificate (missing '-----BEGIN CERTIFICATE-----')", trimmed)
+		return nil, fmt.Errorf("file '%s' does not contain valid PEM certificate (missing '-----BEGIN CERTIFICATE-----')", cleanPath)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("not valid PEM text and could not read file '%s': %w", trimmed, err)
+		return nil, fmt.Errorf("not valid PEM text and could not read file '%s': %w", cleanPath, err)
 	}
 	return nil, fmt.Errorf("invalid certificate input")
 }

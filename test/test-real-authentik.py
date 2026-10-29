@@ -10,6 +10,7 @@ It is not affiliated with, sponsored by, or endorsed by Mattermost or Authentik.
 """
 
 import sys
+import os
 import time
 import json
 import subprocess
@@ -150,27 +151,8 @@ def setup_authentik():
 
 def configure_mattermost():
     print("\n--- Applying Plugin Configuration to Mattermost ---")
-    patch = {
-        "PluginSettings": {
-            "Plugins": {
-                "io.christopherturner.mattermost-authentik": {
-                    "enable": True,
-                    "authentikurl": AUTHENTIK_URL,
-                    "applicationslug": "mattermost",
-                    "clientid": CLIENT_ID,
-                    "clientsecret": CLIENT_SECRET,
-                    "admingroup": "mattermost-admins",
-                    "grantauthentikadmins": True,
-                    "syncadminrole": True,
-                    "scope": "openid profile email groups"
-                }
-            }
-        }
-    }
-    patch_str = json.dumps(patch)
-    with open("/tmp/mm-authentik-patch.json", "w") as f:
-        f.write(patch_str)
-    subprocess.run(["docker", "cp", "/tmp/mm-authentik-patch.json", "test-mattermost-1:/tmp/patch.json"], check=True)
+    config_file = os.path.join(os.path.dirname(__file__), "plugin-real-authentik-config.json")
+    subprocess.run(["docker", "cp", config_file, "test-mattermost-1:/tmp/patch.json"], check=True)
     subprocess.run(["docker", "exec", "test-mattermost-1", "mmctl", "--local", "config", "patch", "/tmp/patch.json"], check=True)
     subprocess.run(["docker", "exec", "test-mattermost-1", "mmctl", "--local", "plugin", "disable", "io.christopherturner.mattermost-authentik"], check=True, stdout=subprocess.DEVNULL)
     subprocess.run(["docker", "exec", "test-mattermost-1", "mmctl", "--local", "plugin", "enable", "io.christopherturner.mattermost-authentik"], check=True, stdout=subprocess.DEVNULL)

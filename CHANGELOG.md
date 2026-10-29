@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Upgraded Go dependencies (`oauth2`, `grpc`, and `go-jose` patch for GHSA-78h2-9frx-2jm8).
 - Hardened admin endpoint authorization to use canonical `PermissionManageSystem` checks and differentiated HTTP 401 (unauthenticated) vs. HTTP 403 (insufficient permissions).
 - Remediated SSRF vulnerabilities (CWE-918) in the connection diagnostic endpoint by enforcing strict server-side configuration retrieval and host verification for discovery, JWKS, and token endpoints.
+- Hardened webapp redirect handling against DOM XSS and unvalidated client-side redirection (CWE-79, CWE-601) via strict origin and protocol parsing.
+- Prevented path traversal in custom certificate loading (CWE-22, CWE-73) with normalized path checks and certificate extension whitelisting.
+- Removed disabled TLS certificate verification (CWE-295) in diagnostic connectivity checks.
+- Eliminated clear-text credential file storage (CWE-312) in integration test tooling by using pre-configured static configuration assets.
 
 ### Fixed
 - Fixed missing email address and edit locking in native Profile modal for Authentik users.
