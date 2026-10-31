@@ -10,6 +10,7 @@
         "admingroup": "mattermost-admins",
         "grantauthentikadmins": true,
         "syncadminrole": true,
+        "defaultteam": "dev",
         "scope": "openid profile email groups"
       }
     }

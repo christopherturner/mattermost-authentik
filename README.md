@@ -46,6 +46,18 @@ Designed to provide native Authentik authentication across **both Mattermost Tea
 
 ---
 
+## Screenshots
+
+| Mattermost Sign-In with Authentik SSO | Plugin Settings & SSO Configuration |
+|---|---|
+| ![Mattermost Login Screen](assets/screenshots/01-mattermost-login-authentik.png) | ![Authentik Plugin Settings](assets/screenshots/02-authentik-plugin-settings.png) |
+
+| Real-Time Connection Diagnostics & Dynamic Scopes | System Console Plugin Management |
+|---|---|
+| ![Live Connection Diagnostics](assets/screenshots/03-authentik-connection-diagnostics.png) | ![System Console Installed Plugins](assets/screenshots/04-system-console-installed-plugins.png) |
+
+---
+
 ## Architecture Overview
 
 ```
@@ -135,7 +147,7 @@ MM_PLUGINSETTINGS_ENABLEUPLOADS=true
 ### Step 1: Upload the Plugin Bundle
 1. In the release assets or your `dist/` directory, locate:
    ```text
-   io.christopherturner.mattermost-authentik-1.1.0.tar.gz
+   io.christopherturner.mattermost-authentik-1.1.1.tar.gz
    ```
 2. In Mattermost, go to **System Console** > **Plugins** > **Plugin Management**.
 3. Under **Upload Plugin**, choose the `.tar.gz` bundle and click **Upload**.
@@ -191,7 +203,7 @@ make bundle
 ```
 The compiled bundle will be available at:
 ```text
-dist/io.christopherturner.mattermost-authentik-1.1.0.tar.gz
+dist/io.christopherturner.mattermost-authentik-1.1.1.tar.gz
 ```
 
 ### Docker Build (No local Go/Node required)

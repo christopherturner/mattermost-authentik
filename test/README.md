@@ -42,7 +42,7 @@ Mattermost containers run with local mode enabled (`MM_SERVICESETTINGS_ENABLELOC
 2. **Install the plugin bundle from the mounted `/dist` directory:**
    ```bash
    docker compose -f test/docker-compose.yml exec mattermost \
-     mmctl --local plugin add /dist/io.christopherturner.mattermost-authentik-1.1.0.tar.gz
+     mmctl --local plugin add /dist/io.christopherturner.mattermost-authentik-1.1.1.tar.gz
    ```
 
 3. **Apply the mock test configuration and enable the plugin:**
@@ -101,7 +101,7 @@ docker compose -f test/docker-compose.real-authentik.yml exec mattermost \
 
 # 2. Install plugin bundle
 docker compose -f test/docker-compose.real-authentik.yml exec mattermost \
-  mmctl --local plugin add /dist/io.christopherturner.mattermost-authentik-1.1.0.tar.gz
+  mmctl --local plugin add /dist/io.christopherturner.mattermost-authentik-1.1.1.tar.gz
 ```
 *(Note: `test/test-real-authentik.py` will automatically configure the Authentik provider/application, patch Mattermost's configuration, and enable the plugin during test execution).*
 
@@ -127,7 +127,7 @@ make bundle
 
 # 2. Overwrite plugin in the running Mattermost instance and reload
 docker compose -f test/docker-compose.yml exec mattermost \
-  mmctl --local plugin add /dist/io.christopherturner.mattermost-authentik-1.1.0.tar.gz
+  mmctl --local plugin add /dist/io.christopherturner.mattermost-authentik-1.1.1.tar.gz
 docker compose -f test/docker-compose.yml exec mattermost \
   mmctl --local plugin disable io.christopherturner.mattermost-authentik
 docker compose -f test/docker-compose.yml exec mattermost \

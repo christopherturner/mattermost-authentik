@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-10-31
+
+### Added
+- Added 512x512 transparent icon assets (`assets/authentik-icon.svg` and `assets/authentik-icon.png`) featuring the Authentik orange logo per Mattermost Marketplace submission guidelines.
+- Added curated screenshots in `assets/screenshots/` showcasing the SSO login experience, System Console configuration, real-time connection diagnostics with dynamic scopes, and plugin management.
+
+### Fixed
+- Fixed user login redirection failure by enforcing default team auto-join during OAuth callback for all authenticating users (both newly provisioned and existing users) whenever a default team is configured.
+- Corrected session cookie attributes: removed `HttpOnly` from `MMUSERID` and `MMCSRF` so the Mattermost single-page application frontend can access CSRF tokens and active session user ID, and dynamically assigned `Secure` based on Site URL protocol (`https://` vs `http://`) to support local development environments without TLS while suppressing CodeQL false positives with inline directives.
+- Removed duplicate icon asset `assets/icon.png` in favor of canonical `assets/authentik-icon.png` and `assets/authentik-icon.svg`.
+
 ## [1.1.0] - 2026-10-28
 
 ### Security

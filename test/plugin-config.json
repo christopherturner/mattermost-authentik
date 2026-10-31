@@ -10,7 +10,7 @@
         "scope": "openid profile email groups",
         "admingroup": "authentik Admins",
         "syncadminrole": true,
-        "defaultteam": "",
+        "defaultteam": "dev",
         "autocreateaccounts": true,
         "autolinkbyemail": true,
         "buttontext": "Log in with Authentik",

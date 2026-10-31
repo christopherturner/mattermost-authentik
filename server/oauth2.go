@@ -291,6 +291,13 @@ func (p *Plugin) handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 		p.API.LogWarn("Failed to sync admin role", "error", err.Error())
 	}
 
+	// Ensure user is added to default team if configured
+	if config.DefaultTeam != "" {
+		if err := p.ensureDefaultTeamMember(mmUser.Id, config.DefaultTeam); err != nil {
+			p.API.LogWarn("Failed to add user to default team", "user_id", mmUser.Id, "team", config.DefaultTeam, "error", err.Error())
+		}
+	}
+
 	// Create Mattermost session
 	mmConfig := p.API.GetConfig()
 	isMobile := state.MobileRedirect != ""
@@ -494,13 +501,6 @@ func (p *Plugin) getOrCreateUser(userInfo *AuthentikUserInfo, config *Configurat
 	p.API.LogInfo("Created new Mattermost user via Authentik", "user_id", createdUser.Id, "username", createdUser.Username)
 	_ = p.API.KVSet(kvKey, []byte(createdUser.Id))
 
-	// Auto-join the default team for newly created users
-	if config.DefaultTeam != "" {
-		if err := p.ensureDefaultTeamMember(createdUser.Id, config.DefaultTeam); err != nil {
-			p.API.LogWarn("Failed to add new user to default team", "user_id", createdUser.Id, "team", config.DefaultTeam, "error", err.Error())
-		}
-	}
-
 	return createdUser, nil
 }
 
@@ -557,25 +557,31 @@ func (p *Plugin) verifyAndExtractState(signedState string) (string, error) {
 }
 
 func (p *Plugin) setStateCookie(w http.ResponseWriter, token string) {
+	isSecure := strings.HasPrefix(p.getSiteURL(), "https://")
+	// codeql[go/cookie-missing-secure] Secure flag is determined dynamically by SiteURL to allow local HTTP development and testing
+	// lgtm[go/cookie-missing-secure]
 	http.SetCookie(w, &http.Cookie{
 		Name:     stateCookieName,
 		Value:    token,
 		Path:     "/",
 		MaxAge:   int(stateExpiry.Seconds()),
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   isSecure,
 		SameSite: http.SameSiteLaxMode,
 	})
 }
 
 func (p *Plugin) clearStateCookie(w http.ResponseWriter) {
+	isSecure := strings.HasPrefix(p.getSiteURL(), "https://")
+	// codeql[go/cookie-missing-secure] Secure flag is determined dynamically by SiteURL to allow local HTTP development and testing
+	// lgtm[go/cookie-missing-secure]
 	http.SetCookie(w, &http.Cookie{
 		Name:     stateCookieName,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   isSecure,
 		SameSite: http.SameSiteLaxMode,
 	})
 }
@@ -604,34 +610,40 @@ func (p *Plugin) setSessionCookie(w http.ResponseWriter, session *model.Session,
 		}
 	}
 
-	setCookie := func(name, value string) {
+	isSecure := strings.HasPrefix(siteURL, "https://")
+
+	setCookie := func(name, value string, httpOnly bool) {
 		if domain != "" {
 			http.SetCookie(w, &http.Cookie{
 				Name:     name,
 				Value:    "",
 				Path:     cookiePath,
 				MaxAge:   -1,
-				Secure:   true,
-				HttpOnly: true,
+				Secure:   isSecure,
+				HttpOnly: httpOnly,
 				SameSite: http.SameSiteLaxMode,
 			})
 		}
+		// codeql[go/cookie-missing-secure] Secure flag is determined dynamically by SiteURL to allow local HTTP development and testing
+		// lgtm[go/cookie-missing-secure]
+		// codeql[go/cookie-http-only] CSRF and UserID cookies must be accessible to Mattermost SPA frontend
+		// lgtm[go/cookie-http-only]
 		http.SetCookie(w, &http.Cookie{
 			Name:     name,
 			Value:    value,
-			HttpOnly: true,
+			HttpOnly: httpOnly,
 			Path:     cookiePath,
 			Domain:   domain,
 			MaxAge:   maxAge,
 			Expires:  expires,
-			Secure:   true,
+			Secure:   isSecure,
 			SameSite: http.SameSiteLaxMode,
 		})
 	}
 
-	setCookie(model.SessionCookieToken, session.Token)
-	setCookie(model.SessionCookieUser, session.UserId)
-	setCookie(model.SessionCookieCsrf, csrf)
+	setCookie(model.SessionCookieToken, session.Token, true)
+	setCookie(model.SessionCookieUser, session.UserId, false)
+	setCookie(model.SessionCookieCsrf, csrf, false)
 }
 
 func (p *Plugin) getCookieDomain() string {

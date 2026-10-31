@@ -1,6 +1,6 @@
 {
   "name": "@christopherturner/mattermost-authentik-webapp",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Authentik for Mattermost webapp (3rd-party tool by Christopher Turner, https://christopherturner.io)",
   "author": "Christopher Turner (https://christopherturner.io)",
   "homepage": "https://mattermost-authentik.christopherturner.io/",
