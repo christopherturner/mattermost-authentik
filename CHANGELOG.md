@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Fixed user login redirection failure by enforcing default team auto-join during OAuth callback for all authenticating users (both newly provisioned and existing users) whenever a default team is configured.
 - Corrected session cookie attributes: removed `HttpOnly` from `MMUSERID` and `MMCSRF` so the Mattermost single-page application frontend can access CSRF tokens and active session user ID, and dynamically assigned `Secure` based on Site URL protocol (`https://` vs `http://`) to support local development environments without TLS while suppressing CodeQL false positives with inline directives.
+- Resolved CodeQL `go/cookie-httponly-not-set` findings by separating cookie emissions to set explicit literal `HttpOnly: true` on `MMAUTHTOKEN` and adding exact `go/cookie-httponly-not-set` suppression directives for non-sensitive SPA client cookies.
 - Removed duplicate icon asset `assets/icon.png` in favor of canonical `assets/authentik-icon.png` and `assets/authentik-icon.svg`.
 
 ## [1.1.0] - 2026-10-28
