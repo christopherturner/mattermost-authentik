@@ -155,7 +155,7 @@
                 "display_name": "Require Verified Email",
                 "type": "bool",
                 "help_text": "When true, logins will be rejected if Authentik reports that the user's email address has not been verified.",
-                "default": false
+                "default": true
             },
             {
                 "key": "ButtonText",

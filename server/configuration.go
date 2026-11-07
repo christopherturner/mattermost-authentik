@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/x509"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -79,8 +80,16 @@ func (c *Configuration) IsValid() error {
 	}
 
 	parsed, err := url.Parse(effectiveIssuer)
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+	if err != nil || parsed.Host == "" {
 		return fmt.Errorf("invalid issuer URL: %s", effectiveIssuer)
+	}
+
+	if parsed.Scheme == "http" {
+		if !isLoopbackHost(parsed.Host) {
+			return fmt.Errorf("cleartext HTTP issuer URL is only permitted for loopback development hosts: %s", effectiveIssuer)
+		}
+	} else if parsed.Scheme != "https" {
+		return fmt.Errorf("issuer URL must use HTTPS scheme: %s", effectiveIssuer)
 	}
 
 	if strings.TrimSpace(c.CustomCert) != "" {
@@ -150,6 +159,22 @@ func loadCertPEM(certInput string) ([]byte, error) {
 		return nil, fmt.Errorf("not valid PEM text and could not read file '%s': %w", cleanPath, err)
 	}
 	return nil, fmt.Errorf("invalid certificate input")
+}
+
+// isLoopbackHost reports whether the given host is a local loopback or container development address.
+func isLoopbackHost(host string) bool {
+	hostname := host
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		hostname = h
+	}
+	hostname = strings.Trim(hostname, "[]")
+	if hostname == "localhost" || strings.HasSuffix(hostname, ".localhost") || hostname == "host.docker.internal" {
+		return true
+	}
+	if ip := net.ParseIP(hostname); ip != nil && ip.IsLoopback() {
+		return true
+	}
+	return false
 }
 
 // setDefaults applies sensible fallback values.

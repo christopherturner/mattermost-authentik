@@ -19,6 +19,7 @@ import (
 
 	oidc "github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gorilla/mux"
+	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin"
 	"golang.org/x/oauth2"
 )
@@ -173,6 +174,21 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Req
 		return
 	}
 	p.router.ServeHTTP(w, r)
+}
+
+// UserWillLogIn is called before the login of the user is returned.
+// When Authentik SSO enforcement is enabled, non-Authentik logins are rejected on the server side.
+func (p *Plugin) UserWillLogIn(c *plugin.Context, user *model.User) string {
+	config := p.getConfiguration()
+	if config == nil || !config.Enable || !config.EnforceSSO {
+		return ""
+	}
+
+	if user.AuthService == AuthService {
+		return ""
+	}
+
+	return "Password login is disabled because Authentik SSO is enforced. Please log in using Authentik."
 }
 
 func (p *Plugin) getConfiguration() *Configuration {

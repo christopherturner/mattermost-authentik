@@ -99,6 +99,36 @@ func TestConfigurationValidation(t *testing.T) {
 		assert.Error(t, cfg.IsValid())
 	})
 
+	t.Run("cleartext HTTP on non-loopback host fails", func(t *testing.T) {
+		cfg := &Configuration{
+			Enable:          true,
+			AuthentikURL:    "http://auth.example.com",
+			ClientID:        "client-123",
+			ClientSecret:    "secret-456",
+		}
+		assert.Error(t, cfg.IsValid())
+	})
+
+	t.Run("cleartext HTTP on localhost passes for development", func(t *testing.T) {
+		cfg := &Configuration{
+			Enable:          true,
+			AuthentikURL:    "http://localhost:9000",
+			ClientID:        "client-123",
+			ClientSecret:    "secret-456",
+		}
+		assert.NoError(t, cfg.IsValid())
+	})
+
+	t.Run("cleartext HTTP on 127.0.0.1 passes for development", func(t *testing.T) {
+		cfg := &Configuration{
+			Enable:          true,
+			AuthentikURL:    "http://127.0.0.1:9000",
+			ClientID:        "client-123",
+			ClientSecret:    "secret-456",
+		}
+		assert.NoError(t, cfg.IsValid())
+	})
+
 	t.Run("invalid custom certificate string fails", func(t *testing.T) {
 		cfg := &Configuration{
 			Enable:       true,

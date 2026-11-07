@@ -454,6 +454,9 @@ func (p *Plugin) getOrCreateUser(userInfo *AuthentikUserInfo, config *Configurat
 		if !config.AutoLinkByEmail {
 			return nil, fmt.Errorf("user with email %s exists but auto-linking is disabled", userInfo.Email)
 		}
+		if userInfo.EmailVerified == nil || !*userInfo.EmailVerified {
+			return nil, fmt.Errorf("cannot link existing Mattermost account for %s: email address is not verified by Authentik", userInfo.Email)
+		}
 
 		p.API.LogInfo("Linking existing Mattermost user to Authentik", "user_id", user.Id, "email", user.Email)
 		_, updateErr := p.API.UpdateUserAuth(user.Id, &model.UserAuth{
@@ -558,8 +561,6 @@ func (p *Plugin) verifyAndExtractState(signedState string) (string, error) {
 
 func (p *Plugin) setStateCookie(w http.ResponseWriter, token string) {
 	isSecure := strings.HasPrefix(p.getSiteURL(), "https://")
-	// codeql[go/cookie-missing-secure] Secure flag is determined dynamically by SiteURL to allow local HTTP development and testing
-	// lgtm[go/cookie-missing-secure]
 	http.SetCookie(w, &http.Cookie{
 		Name:     stateCookieName,
 		Value:    token,
@@ -573,8 +574,6 @@ func (p *Plugin) setStateCookie(w http.ResponseWriter, token string) {
 
 func (p *Plugin) clearStateCookie(w http.ResponseWriter) {
 	isSecure := strings.HasPrefix(p.getSiteURL(), "https://")
-	// codeql[go/cookie-missing-secure] Secure flag is determined dynamically by SiteURL to allow local HTTP development and testing
-	// lgtm[go/cookie-missing-secure]
 	http.SetCookie(w, &http.Cookie{
 		Name:     stateCookieName,
 		Value:    "",
@@ -624,8 +623,6 @@ func (p *Plugin) setSessionCookie(w http.ResponseWriter, session *model.Session,
 			SameSite: http.SameSiteLaxMode,
 		})
 	}
-	// codeql[go/cookie-missing-secure] Secure flag is determined dynamically by SiteURL to allow local HTTP development and testing
-	// lgtm[go/cookie-missing-secure]
 	http.SetCookie(w, &http.Cookie{
 		Name:     model.SessionCookieToken,
 		Value:    session.Token,
@@ -638,65 +635,39 @@ func (p *Plugin) setSessionCookie(w http.ResponseWriter, session *model.Session,
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	// 2. MMUSERID: user identity (non-HttpOnly; required by Mattermost SPA client)
-	if domain != "" {
-		// codeql[go/cookie-httponly-not-set] MMUSERID is read by Mattermost SPA client and cannot be HttpOnly
-		// lgtm[go/cookie-httponly-not-set]
-		http.SetCookie(w, &http.Cookie{
-			Name:     model.SessionCookieUser,
-			Value:    "",
-			Path:     cookiePath,
-			MaxAge:   -1,
-			Secure:   isSecure,
+	// 2. Client-accessible cookies: MMUSERID and MMCSRF must be accessible to the Mattermost SPA
+	// frontend (non-HttpOnly) to support client-side user identification and CSRF token transmission.
+	setClientCookie := func(name, value string) {
+		if domain != "" {
+			if v := (&http.Cookie{
+				Name:     name,
+				Value:    "",
+				Path:     cookiePath,
+				MaxAge:   -1,
+				Secure:   isSecure,
+				HttpOnly: false,
+				SameSite: http.SameSiteLaxMode,
+			}).String(); v != "" {
+				w.Header().Add("Set-Cookie", v)
+			}
+		}
+		if v := (&http.Cookie{
+			Name:     name,
+			Value:    value,
 			HttpOnly: false,
+			Path:     cookiePath,
+			Domain:   domain,
+			MaxAge:   maxAge,
+			Expires:  expires,
+			Secure:   isSecure,
 			SameSite: http.SameSiteLaxMode,
-		})
+		}).String(); v != "" {
+			w.Header().Add("Set-Cookie", v)
+		}
 	}
-	// codeql[go/cookie-missing-secure] Secure flag is determined dynamically by SiteURL to allow local HTTP development and testing
-	// lgtm[go/cookie-missing-secure]
-	// codeql[go/cookie-httponly-not-set] MMUSERID is read by Mattermost SPA client and cannot be HttpOnly
-	// lgtm[go/cookie-httponly-not-set]
-	http.SetCookie(w, &http.Cookie{
-		Name:     model.SessionCookieUser,
-		Value:    session.UserId,
-		HttpOnly: false,
-		Path:     cookiePath,
-		Domain:   domain,
-		MaxAge:   maxAge,
-		Expires:  expires,
-		Secure:   isSecure,
-		SameSite: http.SameSiteLaxMode,
-	})
 
-	// 3. MMCSRF: CSRF double-submit token (non-HttpOnly; required by Mattermost SPA client)
-	if domain != "" {
-		// codeql[go/cookie-httponly-not-set] MMCSRF is read by Mattermost SPA client and cannot be HttpOnly
-		// lgtm[go/cookie-httponly-not-set]
-		http.SetCookie(w, &http.Cookie{
-			Name:     model.SessionCookieCsrf,
-			Value:    "",
-			Path:     cookiePath,
-			MaxAge:   -1,
-			Secure:   isSecure,
-			HttpOnly: false,
-			SameSite: http.SameSiteLaxMode,
-		})
-	}
-	// codeql[go/cookie-missing-secure] Secure flag is determined dynamically by SiteURL to allow local HTTP development and testing
-	// lgtm[go/cookie-missing-secure]
-	// codeql[go/cookie-httponly-not-set] MMCSRF is read by Mattermost SPA client and cannot be HttpOnly
-	// lgtm[go/cookie-httponly-not-set]
-	http.SetCookie(w, &http.Cookie{
-		Name:     model.SessionCookieCsrf,
-		Value:    csrf,
-		HttpOnly: false,
-		Path:     cookiePath,
-		Domain:   domain,
-		MaxAge:   maxAge,
-		Expires:  expires,
-		Secure:   isSecure,
-		SameSite: http.SameSiteLaxMode,
-	})
+	setClientCookie(model.SessionCookieUser, session.UserId)
+	setClientCookie(model.SessionCookieCsrf, csrf)
 }
 
 func (p *Plugin) getCookieDomain() string {

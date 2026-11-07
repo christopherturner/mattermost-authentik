@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -79,4 +80,40 @@ func TestGetCookiePath(t *testing.T) {
 	assert.Equal(t, "/", getCookiePath("https://chat.example.com/"))
 	assert.Equal(t, "/mattermost", getCookiePath("https://chat.example.com/mattermost"))
 	assert.Equal(t, "/mattermost", getCookiePath("https://chat.example.com/mattermost/"))
+}
+
+func TestUserWillLogIn(t *testing.T) {
+	t.Run("allows login when SSO enforcement is disabled", func(t *testing.T) {
+		p := &Plugin{
+			configuration: &Configuration{
+				Enable:     true,
+				EnforceSSO: false,
+			},
+		}
+		msg := p.UserWillLogIn(nil, &model.User{AuthService: ""})
+		assert.Empty(t, msg)
+	})
+
+	t.Run("allows Authentik user when SSO enforcement is enabled", func(t *testing.T) {
+		p := &Plugin{
+			configuration: &Configuration{
+				Enable:     true,
+				EnforceSSO: true,
+			},
+		}
+		msg := p.UserWillLogIn(nil, &model.User{AuthService: AuthService})
+		assert.Empty(t, msg)
+	})
+
+	t.Run("rejects non-Authentik user when SSO enforcement is enabled", func(t *testing.T) {
+		p := &Plugin{
+			configuration: &Configuration{
+				Enable:     true,
+				EnforceSSO: true,
+			},
+		}
+		msg := p.UserWillLogIn(nil, &model.User{AuthService: ""})
+		assert.NotEmpty(t, msg)
+		assert.Contains(t, msg, "Password login is disabled")
+	})
 }

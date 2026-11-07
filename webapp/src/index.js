@@ -201,7 +201,8 @@ class PluginClass {
             ReactDOMLib.render(ReactLib.createElement(AuthentikLoginButton), container);
         }
 
-        // If EnforceSSO is active, hide the username/password form so only SSO is available
+        // If EnforceSSO is active, hide the username/password form for seamless SSO UX.
+        // Server-side enforcement is handled by the plugin's UserWillLogIn hook.
         this.fetchPluginConfig().then((cfg) => {
             if (cfg && cfg.enforce_sso) {
                 const formsToHide = document.querySelectorAll('form.login-form, .signup-body-card-form, #login_section, .login-body-card-form-divider, .signup-body-card-form-divider');
