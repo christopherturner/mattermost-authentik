@@ -1,7 +1,7 @@
 # Authentik for Mattermost
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Mattermost](https://img.shields.io/badge/Mattermost-v10.5%2C%20v11.11%2C%20v12.0.1%20(Tested)-blue)](https://mattermost.com)
+[![Mattermost](https://img.shields.io/badge/Mattermost-v10.5%2C%20v11.11%2C%20v12.1%20(Tested)-blue)](https://mattermost.com)
 [![Edition](https://img.shields.io/badge/Edition-Team%20%26%20Enterprise-green)](https://mattermost.com)
 [![Authentik](https://img.shields.io/badge/Authentik-2026.8%2B%20(Tested)-fd4b2d)](https://goauthentik.io)
 
@@ -9,7 +9,7 @@
 
 An OpenID Connect (OIDC) Single Sign-On (SSO) plugin for **Mattermost** integrating directly with **Authentik**.
 
-Designed to provide native Authentik authentication across **both Mattermost Team Edition and Enterprise**. Fully tested and verified end-to-end on **Mattermost v10.5, v11.11, and v12.0.1** (including React 19 webapp architecture) and **Authentik 2026.8+** (official server and worker).
+Designed to provide native Authentik authentication across **both Mattermost Team Edition and Enterprise**. Fully tested and verified end-to-end on **Mattermost v10.5, v11.11, and v12.1** (including React 19 webapp architecture) and **Authentik 2026.8+** (official server and worker).
 
 ### Project Resources
 - **Project Homepage & Documentation:** [https://mattermost-authentik.christopherturner.io/](https://mattermost-authentik.christopherturner.io/)
@@ -18,7 +18,7 @@ Designed to provide native Authentik authentication across **both Mattermost Tea
 - **Changelog:** [CHANGELOG.md](CHANGELOG.md)
 
 ### Compatibility
-- **Mattermost:** `v10.5.0`, `v11.11.0`, `v12.0.1` (Team Edition and Enterprise)
+- **Mattermost:** `v10.5.0`, `v11.11.0`, `v12.1.0` (Team Edition and Enterprise)
 - **Authentik:** Verified with Authentik `2026.8.x`+ (and any standard OpenID Connect 1.0 provider supporting Authorization Code Flow with PKCE and discovery)
 
 ---
