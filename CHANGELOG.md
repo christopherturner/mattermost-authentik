@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-11-19
+
+### Added
+- Verified email enforcement on account auto-linking (`RequireEmailVerified` setting, enabled by default) to ensure unverified third-party emails cannot claim existing accounts.
+- Server-side SSO enforcement via `UserWillLogIn` plugin hook blocking standard password logins when `EnforceSSO` is active.
+- Strict configuration validation in `IsValid()` rejecting non-loopback cleartext HTTP issuer URLs.
+- Tested and verified compatibility with Mattermost v12.1.0 and Authentik 2026.8.4.
+
+### Fixed
+- Resolved CodeQL security alerts (`go/cookie-httponly-not-set`) by applying literal `HttpOnly: true` on `MMAUTHTOKEN` session cookies and outputting client-accessible non-sensitive cookies (`MMUSERID`, `MMCSRF`) via explicit headers without suppression comments.
+
 ## [1.1.1] - 2026-10-31
 
 ### Added
@@ -13,8 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Fixed user login redirection failure by enforcing default team auto-join during OAuth callback for all authenticating users (both newly provisioned and existing users) whenever a default team is configured.
-- Corrected session cookie attributes: removed `HttpOnly` from `MMUSERID` and `MMCSRF` so the Mattermost single-page application frontend can access CSRF tokens and active session user ID, and dynamically assigned `Secure` based on Site URL protocol (`https://` vs `http://`) to support local development environments without TLS while suppressing CodeQL false positives with inline directives.
-- Resolved CodeQL `go/cookie-httponly-not-set` findings by separating cookie emissions to set explicit literal `HttpOnly: true` on `MMAUTHTOKEN` and adding exact `go/cookie-httponly-not-set` suppression directives for non-sensitive SPA client cookies.
+- Corrected session cookie attributes: removed `HttpOnly` from `MMUSERID` and `MMCSRF` so the Mattermost single-page application frontend can access CSRF tokens and active session user ID, and dynamically assigned `Secure` based on Site URL protocol (`https://` vs `http://`) to support local development environments without TLS.
 - Removed duplicate icon asset `assets/icon.png` in favor of canonical `assets/authentik-icon.png` and `assets/authentik-icon.svg`.
 
 ## [1.1.0] - 2026-10-28

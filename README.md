@@ -31,7 +31,7 @@ Designed to provide native Authentik authentication across **both Mattermost Tea
 - **Authentik Group & Role Synchronization:** Map an Authentik group (e.g. `authentik Admins` or `mattermost-admins`) directly to Mattermost **System Administrator** privileges. Roles are dynamically granted or revoked upon login.
 - **Account Auto-Creation & Linking:**
   - Auto-provisions new users with sanitized usernames, email, and full name.
-  - Automatically links existing email/password or GitLab accounts to Authentik seamlessly on first login.
+  - Automatically links existing email/password or GitLab accounts to Authentik seamlessly on first login (with verified-email enforcement).
 - **Default Team Auto-Join:** Automatically enrolls newly provisioned users into a designated team (e.g. `main` or `engineering`).
 - **Enterprise-Grade Security:**
   - **PKCE (RFC 7636) with SHA-256 (`S256`)** code challenge.
@@ -39,6 +39,9 @@ Designed to provide native Authentik authentication across **both Mattermost Tea
   - **HMAC-signed State Tokens** stored in KV store with strict 10-minute expiry and atomic consumption (`KVCompareAndDelete`).
   - **Browser-bound State Cookie (`MMAUTHENTIKSTATE`)** preventing login CSRF.
   - **Standard Session Cookies:** Correctly sets `MMAUTHTOKEN`, `MMUSERID`, and `MMCSRF` matching Mattermost core session lifetime and subdomain settings.
+  - **Verified Email Enforcement:** Auto-linking and logins enforce verified email confirmation from Authentik to prevent account takeover.
+  - **Server-Side SSO Enforcement:** Blocks standard password logins at the API layer via Mattermost's `UserWillLogIn` hook when SSO enforcement is active.
+  - **Transport Security Validation:** Strict issuer validation rejecting non-loopback cleartext HTTP URLs.
 - **Desktop & Mobile App Support:**
   - Handles the Mattermost Desktop App (Electron) using a popup flow with `localStorage` cross-window event synchronization (bypassing Cross-Origin Opener Policy / COOP navigation blocks).
   - Supports deep-linking redirects for native mobile clients (`mmauth://callback`).
@@ -147,7 +150,7 @@ MM_PLUGINSETTINGS_ENABLEUPLOADS=true
 ### Step 1: Upload the Plugin Bundle
 1. In the release assets or your `dist/` directory, locate:
    ```text
-   io.christopherturner.mattermost-authentik-1.1.1.tar.gz
+   io.christopherturner.mattermost-authentik-1.2.0.tar.gz
    ```
 2. In Mattermost, go to **System Console** > **Plugins** > **Plugin Management**.
 3. Under **Upload Plugin**, choose the `.tar.gz` bundle and click **Upload**.
@@ -175,7 +178,7 @@ In the System Console, navigate to **Plugins** > **Authentik for Mattermost** in
 | **Default Team Handle (Optional)** | `main` | Team handle (e.g. `company` or `engineering`) to auto-join new users. |
 | **Auto-Create Accounts** | `true` | Automatically provisions accounts for new users. |
 | **Auto-Link Existing Accounts by Email**| `true` | Links existing Mattermost users with matching email addresses. |
-| **Require Verified Email** | `false` | If `true`, rejects login unless Authentik confirms email is verified. |
+| **Require Verified Email** | `true` | When `true`, logins will be rejected if Authentik reports that the user's email address has not been verified. |
 | **Login Button Text** | `Log in with Authentik` | Text displayed on the login button. |
 | **Login Button Color** | `#FD4B2D` | Button background color (Authentik brand color). |
 | **Manage Legacy LDAP Accounts** | *(Action buttons)* | Tool to view, unlock, or deactivate leftover LDAP accounts so they can link to Authentik. |
@@ -203,7 +206,7 @@ make bundle
 ```
 The compiled bundle will be available at:
 ```text
-dist/io.christopherturner.mattermost-authentik-1.1.1.tar.gz
+dist/io.christopherturner.mattermost-authentik-1.2.0.tar.gz
 ```
 
 ### Docker Build (No local Go/Node required)
