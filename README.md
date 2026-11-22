@@ -63,37 +63,22 @@ Designed to provide native Authentik authentication across **both Mattermost Tea
 
 ## Architecture Overview
 
-```
-┌─────────────────┐           ┌─────────────────────────────┐           ┌────────────────────┐
-│   User Browser  │           │   Mattermost Plugin (Go)    │           │     Authentik      │
-└────────┬────────┘           └──────────────┬──────────────┘           └─────────┬──────────┘
-         │                                   │                                    │
-         │  1. Click "Log in with Authentik" │                                    │
-         ├──────────────────────────────────►│                                    │
-         │  2. Set state cookie & 302        │                                    │
-         │◄──────────────────────────────────┤                                    │
-         │                                   │                                    │
-         │  3. Authorize via Authentik (PKCE + Nonce)                             │
-         ├───────────────────────────────────────────────────────────────────────►│
-         │  4. User authenticates & redirects to /oauth2/callback?code=...        │
-         │◄───────────────────────────────────────────────────────────────────────┤
-         │                                   │                                    │
-         │  5. Forward authorization code    │                                    │
-         ├──────────────────────────────────►│                                    │
-         │                                   │  6. Exchange code for tokens (PKCE)│
-         │                                   ├───────────────────────────────────►│
-         │                                   │  7. Return ID Token & Access Token │
-         │                                   │◄───────────────────────────────────┤
-         │                                   │                                    │
-         │                                   │  8. Verify ID Token & Nonce        │
-         │                                   │  9. Provision / Link User          │
-         │                                   │ 10. Sync System Admin Role         │
-         │                                   │ 11. Create Session (p.API)         │
-         │  12. Set MMAUTHTOKEN cookie & 302 │                                    │
-         │◄──────────────────────────────────┤                                    │
-         │                                   │                                    │
-         │  13. Access Mattermost App        │                                    │
-         ├──────────────────────────────────►│                                    │
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Browser as User Browser
+    participant Plugin as Mattermost Plugin
+    participant Authentik as Authentik
+
+    Browser->>Plugin: Click "Log in with Authentik"
+    Plugin-->>Browser: Set state cookie & redirect to Authentik
+    Browser->>Authentik: Authenticate & authorize (PKCE + Nonce)
+    Authentik-->>Browser: Redirect to /oauth2/callback?code=...
+    Browser->>Plugin: Forward authorization code & state
+    Plugin->>Authentik: Exchange code for tokens (PKCE)
+    Authentik-->>Plugin: Return ID Token & Access Token
+    Note over Plugin: Verify token & nonce, validate email,<br/>provision/link user, sync roles, and create session
+    Plugin-->>Browser: Set MMAUTHTOKEN cookie & redirect to Mattermost
 ```
 
 ---
@@ -201,6 +186,12 @@ Clone the repository and run:
 # Run tests
 make test
 
+# Run linter and vulnerability scanner
+make lint
+
+# Verify tests, linting, and build in one step
+make check
+
 # Build server binaries, webapp bundle, and package .tar.gz
 make bundle
 ```
@@ -229,6 +220,18 @@ make deploy
 
 ### Does this require an Enterprise or Professional license?
 **No.** Mattermost Team Edition allows full execution of plugins. While native OIDC in the core server settings (`OpenIdSettings`) requires an Enterprise license, this plugin provides its own complete OIDC implementation via the official Plugin API (`plugin.API.CreateSession`, `CreateUser`, etc.).
+
+### Why do I get "Authentik login rejected: email not verified"?
+In version 1.2.0+, `RequireEmailVerified` defaults to `true` to prevent account takeover via unverified third-party emails. If your Authentik OAuth2 Scope Mapping does not include an explicit `email_verified` claim, Authentik may report `email_verified: false`. In Authentik:
+1. Navigate to **Customization** > **Property Mappings**.
+2. Locate or create an OpenID Scope Mapping for `email` and ensure `email_verified` returns `True` (e.g. `return {"email": request.user.email, "email_verified": True}`).
+3. Alternatively, if your email setup does not verify addresses, you can toggle **Require Verified Email** to `false` in the System Console.
+
+### How do I configure Self-Signed TLS or Custom CA Certificates?
+If your Authentik instance uses a private CA or self-signed certificate:
+1. In the Mattermost System Console, navigate to **Plugins** > **Authentik for Mattermost**.
+2. Under **Custom Root CA Certificate**, either paste the full PEM-encoded certificate text (including `-----BEGIN CERTIFICATE-----` and `-----END CERTIFICATE-----`), or specify the absolute container path to the `.pem` or `.crt` file (e.g. `/certs/authentik-ca.pem`).
+3. Click **Diagnose Connection** to empirically verify the TLS handshake before saving.
 
 ### How are existing accounts linked?
 When **Auto-Link Existing Accounts by Email** is enabled, an existing user logging in with Authentik for the first time will have their Mattermost `AuthService` set to `authentik` and mapped to their Authentik `sub`. Their existing channels, messages, and settings remain untouched.
