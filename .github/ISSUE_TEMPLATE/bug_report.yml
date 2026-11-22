@@ -1,0 +1,58 @@
+name: Bug Report
+description: Report an issue or bug with Authentik for Mattermost
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report an issue! Before opening, please verify that you are running a supported version of Mattermost (>= 10.5.0) and Authentik (>= 2026.8.0).
+  - type: input
+    id: mm_version
+    attributes:
+      label: Mattermost Server Version
+      description: e.g. v12.1.0, v11.11.0, v10.5.0 (Team or Enterprise)
+      placeholder: v12.1.0
+    validations:
+      required: true
+  - type: input
+    id: authentik_version
+    attributes:
+      label: Authentik Version
+      description: e.g. 2026.8.6
+      placeholder: 2026.8.6
+    validations:
+      required: true
+  - type: input
+    id: plugin_version
+    attributes:
+      label: Plugin Version
+      description: e.g. v1.2.1
+      placeholder: v1.2.1
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description of the Problem
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to Reproduce
+      description: Detailed steps to reproduce the behavior.
+      placeholder: |
+        1. Navigate to Mattermost login screen
+        2. Click 'Log in with Authentik'
+        3. Enter credentials in Authentik
+        4. See error...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Server Logs / Diagnostics Output
+      description: Relevant logs from Mattermost (System Console > Logs) or the plugin's "Diagnose Connection" utility.
+      render: text
