@@ -76,7 +76,7 @@ func (c *Configuration) IsValid() error {
 
 	effectiveIssuer := c.GetEffectiveIssuerURL()
 	if effectiveIssuer == "" {
-		return fmt.Errorf("Authentik URL or Issuer URL must be specified")
+		return fmt.Errorf("authentik URL or issuer URL must be specified")
 	}
 
 	parsed, err := url.Parse(effectiveIssuer)
