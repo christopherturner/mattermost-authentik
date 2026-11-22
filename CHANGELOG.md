@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-11-21
+
+### Security & Dependency Updates
+- Upgraded `github.com/mattermost/mattermost/server/public` to `v0.6.1` and `github.com/russellhaering/goxmldsig` to `v1.6.1`, eliminating 74 upstream CVE alerts in dependencies (including CVE-2026-13426 / GHSA-72v2-v53v-4qmm and CVE-2026-33186) and removing the legacy `server/v8` indirect dependency.
+
+### Fixed
+- Decoupled GitHub Pages deployment workflow into separate `build` and `deploy` jobs to eliminate artifact indexing race conditions.
+
+### Added
+- Added repository security policy in `SECURITY.md` detailing GitHub Private Vulnerability Reporting procedures.
+- Updated `support_url` in `plugin.json` to canonical issue tracker endpoint.
+
 ## [1.2.0] - 2026-11-19
 
 ### Added
