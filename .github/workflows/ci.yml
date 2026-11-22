@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+# Principle of least privilege: strictly read-only for repository contents.
+# Pull requests from forks are denied access to secrets and cannot modify repository state.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-server:
+    name: Server Tests & Lint
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - name: Run server unit tests (with race detector)
+        run: |
+          cd server
+          go test -v -race ./...
+
+      - name: Run go vet
+        run: |
+          cd server
+          go vet ./...
+
+  test-webapp:
+    name: Webapp Build & Lint
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          cd webapp
+          npm ci
+
+      - name: Build webapp bundle
+        run: |
+          cd webapp
+          npm run build
+
+  bundle-check:
+    name: Cross-Platform Bundle Verification
+    runs-on: ubuntu-24.04
+    needs: [test-server, test-webapp]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+
+      - name: Verify plugin cross-compilation & packaging
+        run: make bundle
+
+      - name: Verify bundle artifact exists
+        run: |
+          ls -lh dist/io.christopherturner.mattermost-authentik-*.tar.gz
