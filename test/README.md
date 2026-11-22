@@ -72,7 +72,7 @@ docker compose -f test/docker-compose.yml down -v
 
 ## Option B: Real Authentik Instance (Complete Production Stack)
 
-Runs against the official `ghcr.io/goauthentik/server:2026.8.4` image with PostgreSQL and Redis. Tests against live Authentik authorization flows, OIDC auto-discovery, PKCE verification, RSA JWKS key signatures, and live group synchronization.
+Runs against the official `ghcr.io/goauthentik/server:2026.8.6` image with PostgreSQL and Redis. Tests against live Authentik authorization flows, OIDC auto-discovery, PKCE verification, RSA JWKS key signatures, and live group synchronization.
 
 ### 1. Build the Plugin Bundle
 ```bash

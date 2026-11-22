@@ -49,10 +49,13 @@ def wait_for_services():
         try:
             with urllib.request.urlopen(f"{AUTHENTIK_URL}/api/v3/root/config/"):
                 with urllib.request.urlopen(f"{MATTERMOST_URL}/api/v4/system/ping"):
-                    print("Services are healthy and responsive.")
-                    return
+                    flows = ak_api("/flows/instances/").get("results", [])
+                    if any(f.get("slug") == "default-provider-authorization-implicit-consent" for f in flows):
+                        print("Services and default flows are healthy and responsive.")
+                        return
         except Exception:
-            time.sleep(2)
+            pass
+        time.sleep(2)
     raise TimeoutError("Timed out waiting for services to become ready.")
 
 def setup_authentik():
@@ -71,8 +74,15 @@ def setup_authentik():
     if not signing_key:
         raise RuntimeError("No signing certificate keypair found in Authentik.")
 
-    # 3. Fetch Scope Mappings
+    # 3. Fetch and Configure Scope Mappings
     mappings = ak_api("/propertymappings/provider/scope/")["results"]
+    email_mapping = next((m for m in mappings if m["scope_name"] == "email"), None)
+    if email_mapping:
+        ak_api(f"/propertymappings/provider/scope/{email_mapping['pk']}/", {
+            "name": email_mapping["name"],
+            "scope_name": "email",
+            "expression": "return {\n    \"email\": request.user.email,\n    \"email_verified\": True\n}"
+        }, method="PATCH")
     scope_pks = [m["pk"] for m in mappings if m["scope_name"] in ["openid", "email", "profile"]]
 
     # 4. Create or Update OAuth2 Provider

@@ -11,6 +11,7 @@
         "grantauthentikadmins": true,
         "syncadminrole": true,
         "defaultteam": "dev",
+        "requireemailverified": true,
         "scope": "openid profile email groups"
       }
     }
