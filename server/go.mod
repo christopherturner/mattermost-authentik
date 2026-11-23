@@ -3,11 +3,11 @@ module christopherturner.io/mattermost-authentik/server
 go 1.26.10
 
 require (
-	github.com/coreos/go-oidc/v3 v3.12.0
+	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/gorilla/mux v1.8.1
 	github.com/mattermost/mattermost/server/public v0.6.1
 	github.com/stretchr/testify v1.12.1
-	golang.org/x/oauth2 v0.37.0
+	golang.org/x/oauth2 v0.38.0
 )
 
 require (
