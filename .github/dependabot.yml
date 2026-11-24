@@ -16,12 +16,9 @@ updates:
     schedule:
       interval: "weekly"
     groups:
-      minor-and-patch:
+      go-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
 
   # Maintain npm dependencies for the webapp SPA
   - package-ecosystem: "npm"
@@ -29,9 +26,10 @@ updates:
     schedule:
       interval: "weekly"
     groups:
-      minor-and-patch:
+      npm-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
+    ignore:
+      # Babel 8 packages require @babel/core 8 which is not yet stable
+      - dependency-name: "@babel/*"
+        update-types: ["version-update:semver-major"]
