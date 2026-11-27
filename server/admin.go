@@ -136,9 +136,11 @@ func (p *Plugin) handleDeactivateLDAPUsers(w http.ResponseWriter, r *http.Reques
 	}
 
 	deactivatedCount := 0
+	var failedUsers []string
 	for _, uid := range targetIDs {
 		if appErr := p.API.UpdateUserActive(uid, false); appErr != nil {
 			p.API.LogError("Failed to deactivate LDAP user", "user_id", uid, "error", appErr.Error())
+			failedUsers = append(failedUsers, uid)
 		} else {
 			deactivatedCount++
 		}
@@ -150,6 +152,7 @@ func (p *Plugin) handleDeactivateLDAPUsers(w http.ResponseWriter, r *http.Reques
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"success":     true,
 		"deactivated": deactivatedCount,
+		"failed":      failedUsers,
 	})
 }
 

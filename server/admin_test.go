@@ -412,11 +412,14 @@ func TestHandleDeactivateLDAPUsers(t *testing.T) {
 		p, api := setupTestPluginWithAPI()
 		api.On("HasPermissionTo", "admin-user-id", model.PermissionManageSystem).Return(true)
 		api.On("LogInfo", mock.Anything, mock.Anything, mock.Anything).Maybe()
+		api.On("LogError", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Maybe()
 		api.On("GetUsers", mock.Anything).Return([]*model.User{
 			{Id: "u1", AuthService: "ldap", DeleteAt: 0},
+			{Id: "u3", AuthService: "ldap", DeleteAt: 0},
 			{Id: "u2", AuthService: "authentik", DeleteAt: 0},
 		}, nil)
 		api.On("UpdateUserActive", "u1", false).Return(nil)
+		api.On("UpdateUserActive", "u3", false).Return(model.NewAppError("UpdateUserActive", "err", nil, "", http.StatusInternalServerError))
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/deactivate-ldap", strings.NewReader(`{}`))
 		req.Header.Set("Mattermost-User-Id", "admin-user-id")
@@ -425,11 +428,13 @@ func TestHandleDeactivateLDAPUsers(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		var resp struct {
-			Success     bool `json:"success"`
-			Deactivated int  `json:"deactivated"`
+			Success     bool     `json:"success"`
+			Deactivated int      `json:"deactivated"`
+			Failed      []string `json:"failed"`
 		}
 		require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
 		assert.True(t, resp.Success)
 		assert.Equal(t, 1, resp.Deactivated)
+		assert.Equal(t, []string{"u3"}, resp.Failed)
 	})
 }
