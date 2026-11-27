@@ -29,7 +29,8 @@ func TestSignAndVerifyState(t *testing.T) {
 
 	t.Run("valid state roundtrip", func(t *testing.T) {
 		token := "random-state-token-12345"
-		signed := p.signState(token)
+		signed, err := p.signState(token)
+		require.NoError(t, err)
 
 		extracted, err := p.verifyAndExtractState(signed)
 		assert.NoError(t, err)
@@ -38,10 +39,11 @@ func TestSignAndVerifyState(t *testing.T) {
 
 	t.Run("tampered state token is rejected", func(t *testing.T) {
 		token := "random-state-token-12345"
-		signed := p.signState(token)
+		signed, err := p.signState(token)
+		require.NoError(t, err)
 
 		tampered := "tampered-token" + signed[len(token):]
-		_, err := p.verifyAndExtractState(tampered)
+		_, err = p.verifyAndExtractState(tampered)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "state signature mismatch")
 	})
@@ -54,12 +56,13 @@ func TestSignAndVerifyState(t *testing.T) {
 
 	t.Run("wrong key fails signature verification", func(t *testing.T) {
 		token := "random-state-token-12345"
-		signed := p.signState(token)
+		signed, err := p.signState(token)
+		require.NoError(t, err)
 
 		pOther := &Plugin{
 			encryptionKey: "different-encryption-key",
 		}
-		_, err := pOther.verifyAndExtractState(signed)
+		_, err = pOther.verifyAndExtractState(signed)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "state signature mismatch")
 	})
@@ -416,7 +419,9 @@ func TestHandleOAuth2Callback(t *testing.T) {
 			Props:     model.StringMap{"csrf": "csrf-1"},
 		}, nil)
 
-		req := httptest.NewRequest(http.MethodGet, "/oauth2/callback?code=auth-code&state="+url.QueryEscape(p.signState(stateToken)), nil)
+		signedState, signErr := p.signState(stateToken)
+		require.NoError(t, signErr)
+		req := httptest.NewRequest(http.MethodGet, "/oauth2/callback?code=auth-code&state="+url.QueryEscape(signedState), nil)
 		req.AddCookie(&http.Cookie{Name: stateCookieName, Value: stateToken})
 		w := httptest.NewRecorder()
 		p.router.ServeHTTP(w, req)

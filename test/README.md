@@ -127,7 +127,7 @@ make bundle
 
 # 2. Overwrite plugin in the running Mattermost instance and reload
 docker compose -f test/docker-compose.yml exec mattermost \
-  mmctl --local plugin add /dist/io.christopherturner.mattermost-authentik-1.2.1.tar.gz
+  mmctl --local plugin add --force /dist/io.christopherturner.mattermost-authentik-1.2.1.tar.gz
 docker compose -f test/docker-compose.yml exec mattermost \
   mmctl --local plugin disable io.christopherturner.mattermost-authentik
 docker compose -f test/docker-compose.yml exec mattermost \

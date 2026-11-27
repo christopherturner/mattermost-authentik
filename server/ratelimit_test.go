@@ -33,10 +33,12 @@ func TestIPRateLimiter(t *testing.T) {
 		limiter := newIPRateLimiter(5, time.Minute)
 		limiter.now = func() time.Time { return now }
 
-		for i := 0; i <= rateLimiterMaxBuckets; i++ {
-			limiter.Allow(fmt.Sprintf("10.0.%d.%d", i/256, i%256))
+		for i := 0; i < rateLimiterMaxBuckets; i++ {
+			assert.True(t, limiter.Allow(fmt.Sprintf("10.0.%d.%d", i/256, i%256)))
 		}
-		assert.Greater(t, len(limiter.buckets), rateLimiterMaxBuckets)
+		assert.Equal(t, rateLimiterMaxBuckets, len(limiter.buckets))
+		// Capacity reached within window -> new key rejected
+		assert.False(t, limiter.Allow("203.0.113.99"))
 
 		now = now.Add(2 * time.Minute)
 		assert.True(t, limiter.Allow("203.0.113.1"))

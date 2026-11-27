@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"time"
@@ -15,7 +16,7 @@ const (
 	// KVUserSessionsPrefix stores active Mattermost session IDs for a user to support SLO.
 	KVUserSessionsPrefix = "authentik_sessions_"
 
-	// KVSIDPrefix maps an OIDC session ID (sid) to a Mattermost session ID.
+	// KVSIDPrefix maps an OIDC session ID (sid) to Mattermost session IDs.
 	KVSIDPrefix = "authentik_sid_"
 
 	backChannelLogoutEvent = "http://schemas.openid.net/event/backchannel-logout"
@@ -54,72 +55,150 @@ func (p *Plugin) trackUserSession(userID, sessionID, sid string, expiresAt int64
 		SID:       sid,
 		ExpiresAt: expiresAt,
 	})
-	if len(active) > maxTrackedSessions {
-		active = active[len(active)-maxTrackedSessions:]
+	for len(active) > maxTrackedSessions {
+		evicted := active[0]
+		active = active[1:]
+		if err := p.API.RevokeSession(evicted.SessionID); err != nil {
+			p.API.LogWarn("Failed to revoke evicted oldest SSO session", "session_id", evicted.SessionID, "error", err.Error())
+		}
 	}
 
-	ttl := max((expiresAt-now)/1000, 60)
+	maxExpiresAt := expiresAt
+	for _, s := range active {
+		if s.ExpiresAt > maxExpiresAt {
+			maxExpiresAt = s.ExpiresAt
+		}
+	}
+	ttl := max((maxExpiresAt-now)/1000, 60)
 	if encoded, err := json.Marshal(active); err == nil {
 		_ = p.API.KVSetWithExpiry(kvKey, encoded, ttl)
 	}
 
 	if sid != "" {
-		_ = p.API.KVSetWithExpiry(KVSIDPrefix+sid, []byte(sessionID), ttl)
+		sidKey := KVSIDPrefix + sid
+		var sidSessions []string
+		if data, appErr := p.API.KVGet(sidKey); appErr == nil && len(data) > 0 {
+			if json.Unmarshal(data, &sidSessions) != nil {
+				sidSessions = []string{string(data)}
+			}
+		}
+		found := false
+		for _, id := range sidSessions {
+			if id == sessionID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			sidSessions = append(sidSessions, sessionID)
+		}
+		if encoded, err := json.Marshal(sidSessions); err == nil {
+			_ = p.API.KVSetWithExpiry(sidKey, encoded, ttl)
+		}
 	}
 }
 
-func (p *Plugin) revokeUserSessions(userID string) int {
+func (p *Plugin) revokeUserSessions(userID string) (int, error) {
 	if p.API == nil || userID == "" {
-		return 0
+		return 0, nil
 	}
 
 	kvKey := KVUserSessionsPrefix + userID
 	data, appErr := p.API.KVGet(kvKey)
 	if appErr != nil || len(data) == 0 {
-		return 0
+		return 0, nil
 	}
 
 	var sessions []trackedSession
 	if err := json.Unmarshal(data, &sessions); err != nil {
-		return 0
+		return 0, nil
 	}
 
 	now := model.GetMillis()
 	revoked := 0
+	var remaining []trackedSession
+	var firstErr error
+
 	for _, s := range sessions {
-		if s.ExpiresAt > now {
-			if err := p.API.RevokeSession(s.SessionID); err != nil {
+		if s.ExpiresAt <= now {
+			continue
+		}
+		if err := p.API.RevokeSession(s.SessionID); err != nil {
+			// If the session is already gone, treat it as revoked; otherwise retain for retry.
+			if _, getErr := p.API.GetSession(s.SessionID); getErr == nil {
 				p.API.LogWarn("Failed to revoke Mattermost session during SLO", "session_id", s.SessionID, "error", err.Error())
-			} else {
-				revoked++
+				remaining = append(remaining, s)
+				if firstErr == nil {
+					firstErr = fmt.Errorf("failed to revoke session %s: %s", s.SessionID, err.Error())
+				}
+				continue
 			}
 		}
+		revoked++
 		if s.SID != "" {
 			_ = p.API.KVDelete(KVSIDPrefix + s.SID)
 		}
 	}
+
+	if len(remaining) > 0 {
+		maxExpiresAt := now
+		for _, s := range remaining {
+			if s.ExpiresAt > maxExpiresAt {
+				maxExpiresAt = s.ExpiresAt
+			}
+		}
+		if encoded, err := json.Marshal(remaining); err == nil {
+			_ = p.API.KVSetWithExpiry(kvKey, encoded, max((maxExpiresAt-now)/1000, 60))
+		}
+		return revoked, firstErr
+	}
+
 	_ = p.API.KVDelete(kvKey)
-	return revoked
+	return revoked, nil
 }
 
-func (p *Plugin) revokeSessionBySID(sid string) bool {
+func (p *Plugin) revokeSessionBySID(sid string) (bool, error) {
 	if p.API == nil || sid == "" {
-		return false
+		return false, nil
 	}
 
 	kvKey := KVSIDPrefix + sid
 	data, appErr := p.API.KVGet(kvKey)
 	if appErr != nil || len(data) == 0 {
-		return false
+		return false, nil
 	}
 
-	sessionID := string(data)
-	_ = p.API.KVDelete(kvKey)
-	if err := p.API.RevokeSession(sessionID); err != nil {
-		p.API.LogWarn("Failed to revoke Mattermost session by OIDC sid", "sid", sid, "error", err.Error())
-		return false
+	var sessionIDs []string
+	if err := json.Unmarshal(data, &sessionIDs); err != nil {
+		sessionIDs = []string{string(data)}
 	}
-	return true
+
+	var remaining []string
+	var firstErr error
+	for _, sessionID := range sessionIDs {
+		if sessionID == "" {
+			continue
+		}
+		if err := p.API.RevokeSession(sessionID); err != nil {
+			if _, getErr := p.API.GetSession(sessionID); getErr == nil {
+				p.API.LogWarn("Failed to revoke Mattermost session by OIDC sid", "sid", sid, "session_id", sessionID, "error", err.Error())
+				remaining = append(remaining, sessionID)
+				if firstErr == nil {
+					firstErr = fmt.Errorf("failed to revoke session %s: %s", sessionID, err.Error())
+				}
+			}
+		}
+	}
+
+	if len(remaining) > 0 {
+		if encoded, err := json.Marshal(remaining); err == nil {
+			_ = p.API.KVSetWithExpiry(kvKey, encoded, 3600)
+		}
+		return true, firstErr
+	}
+
+	_ = p.API.KVDelete(kvKey)
+	return true, nil
 }
 
 // handleOAuth2Logout handles RP-initiated Single Logout, revoking local tracked sessions
@@ -130,7 +209,7 @@ func (p *Plugin) handleOAuth2Logout(w http.ResponseWriter, r *http.Request) {
 	fallbackRedirect := siteURL + "/login?no_sso=1"
 
 	if userID := r.Header.Get("Mattermost-User-Id"); userID != "" {
-		p.revokeUserSessions(userID)
+		_, _ = p.revokeUserSessions(userID)
 	}
 
 	if !config.Enable || !config.EnableSLO {
@@ -228,14 +307,19 @@ func (p *Plugin) handleBackChannelLogout(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	var revokeErr error
 	revokedBySID := false
 	if claims.SID != "" {
-		revokedBySID = p.revokeSessionBySID(claims.SID)
+		revokedBySID, revokeErr = p.revokeSessionBySID(claims.SID)
 	}
 	if !revokedBySID && claims.Subject != "" {
 		if userIDBytes, appErr := p.API.KVGet(KVUserPrefix + claims.Subject); appErr == nil && len(userIDBytes) > 0 {
-			p.revokeUserSessions(string(userIDBytes))
+			_, revokeErr = p.revokeUserSessions(string(userIDBytes))
 		}
+	}
+	if revokeErr != nil {
+		http.Error(w, "Failed to revoke all sessions", http.StatusServiceUnavailable)
+		return
 	}
 
 	p.API.LogInfo("Processed OIDC back-channel logout", "sub", claims.Subject, "sid", claims.SID)

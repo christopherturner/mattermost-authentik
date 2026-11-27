@@ -228,7 +228,7 @@ make deploy
 ### Why do I get "Authentik login rejected: email not verified"?
 In version 1.2.0+, `RequireEmailVerified` defaults to `true` to prevent account takeover via unverified third-party emails. If your Authentik OAuth2 Scope Mapping does not include an explicit `email_verified` claim, Authentik may report `email_verified: false`. In Authentik:
 1. Navigate to **Customization** > **Property Mappings**.
-2. Locate or create an OpenID Scope Mapping for `email` and ensure `email_verified` returns `True` (e.g. `return {"email": request.user.email, "email_verified": True}`).
+2. Locate or create an OpenID Scope Mapping for `email` and ensure `email_verified` reflects your directory's verification state (if your Authentik directory strictly contains verified emails, you can return `return {"email": request.user.email, "email_verified": True}`).
 3. Alternatively, if your email setup does not verify addresses, you can toggle **Require Verified Email** to `false` in the System Console.
 
 ### How do I configure Self-Signed TLS or Custom CA Certificates?

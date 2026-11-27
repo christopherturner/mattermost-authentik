@@ -133,11 +133,13 @@ func TestHandleBackChannelLogout(t *testing.T) {
 		assert.Contains(t, w.Body.String(), "event")
 	})
 
-	t.Run("revokes session by sid on valid logout_token", func(t *testing.T) {
+	t.Run("revokes all sessions by sid on valid logout_token", func(t *testing.T) {
 		p, apiMock := newConfiguredPlugin()
-		apiMock.On("KVGet", KVSIDPrefix+"sid-abc").Return([]byte("mm-sess-99"), nil)
+		sidData, _ := json.Marshal([]string{"mm-sess-99", "mm-sess-100"})
+		apiMock.On("KVGet", KVSIDPrefix+"sid-abc").Return(sidData, nil)
 		apiMock.On("KVDelete", KVSIDPrefix+"sid-abc").Return(nil)
 		apiMock.On("RevokeSession", "mm-sess-99").Return(nil)
+		apiMock.On("RevokeSession", "mm-sess-100").Return(nil)
 
 		tok := signTestIDToken(t, priv, map[string]interface{}{
 			"iss":    srv.URL + "/application/o/mattermost",
@@ -158,6 +160,7 @@ func TestHandleBackChannelLogout(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
 		apiMock.AssertCalled(t, "RevokeSession", "mm-sess-99")
+		apiMock.AssertCalled(t, "RevokeSession", "mm-sess-100")
 	})
 
 	t.Run("revokes all tracked user sessions by sub when sid is absent", func(t *testing.T) {

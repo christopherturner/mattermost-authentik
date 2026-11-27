@@ -171,6 +171,28 @@ func (p *Plugin) checkAdminAuthorization(w http.ResponseWriter, r *http.Request)
 	return true
 }
 
+func effectivePort(u *url.URL) string {
+	if p := u.Port(); p != "" {
+		return p
+	}
+	if strings.EqualFold(u.Scheme, "https") {
+		return "443"
+	}
+	if strings.EqualFold(u.Scheme, "http") {
+		return "80"
+	}
+	return ""
+}
+
+func sameOrigin(a, b *url.URL) bool {
+	if a == nil || b == nil {
+		return false
+	}
+	return strings.EqualFold(a.Scheme, b.Scheme) &&
+		strings.EqualFold(a.Hostname(), b.Hostname()) &&
+		effectivePort(a) == effectivePort(b)
+}
+
 // isAdmin checks if the user has System Administrator permissions.
 func (p *Plugin) isAdmin(userID string) bool {
 	return p.API.HasPermissionTo(userID, model.PermissionManageSystem)
@@ -250,6 +272,15 @@ func (p *Plugin) handleDiagnoseConnection(w http.ResponseWriter, r *http.Request
 	}
 	httpClient := p.getHTTPClient(diagConfig)
 	httpClient.Timeout = 10 * time.Second
+	httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return fmt.Errorf("stopped after 10 redirects")
+		}
+		if !sameOrigin(req.URL, parsedIssuer) {
+			return fmt.Errorf("redirect to disallowed origin '%s'", req.URL.Scheme+"://"+req.URL.Host)
+		}
+		return nil
+	}
 
 	// Step 1: TLS / Certificate Check (tests if a certificate file is needed)
 	certStep := p.checkTLSCertificate(parsedIssuer.String(), customCert, skipTLSVerify)
@@ -341,13 +372,13 @@ func (p *Plugin) handleDiagnoseConnection(w http.ResponseWriter, r *http.Request
 				URL:     jwksURL,
 				Details: fmt.Sprintf("Invalid JWKS endpoint URL '%s': must be a valid HTTP or HTTPS URL", jwksURL),
 			})
-		} else if !strings.EqualFold(parsedJWKS.Hostname(), parsedIssuer.Hostname()) {
+		} else if !sameOrigin(parsedJWKS, parsedIssuer) {
 			overallSuccess = false
 			steps = append(steps, DiagnosticStep{
 				Name:    "JWKS Cryptographic Keys",
 				Status:  "error",
 				URL:     jwksURL,
-				Details: fmt.Sprintf("JWKS endpoint host '%s' does not match issuer host '%s'", parsedJWKS.Hostname(), parsedIssuer.Hostname()),
+				Details: fmt.Sprintf("JWKS endpoint origin '%s://%s' does not match issuer origin '%s://%s'", parsedJWKS.Scheme, parsedJWKS.Host, parsedIssuer.Scheme, parsedIssuer.Host),
 			})
 		} else {
 			t0 := time.Now()
@@ -422,13 +453,13 @@ func (p *Plugin) handleDiagnoseConnection(w http.ResponseWriter, r *http.Request
 				URL:     tokenURL,
 				Details: fmt.Sprintf("Invalid token endpoint URL '%s': must be a valid HTTP or HTTPS URL", tokenURL),
 			})
-		} else if !strings.EqualFold(parsedToken.Hostname(), parsedIssuer.Hostname()) {
+		} else if !sameOrigin(parsedToken, parsedIssuer) {
 			overallSuccess = false
 			steps = append(steps, DiagnosticStep{
 				Name:    "Client ID & Secret Credentials",
 				Status:  "error",
 				URL:     tokenURL,
-				Details: fmt.Sprintf("Token endpoint host '%s' does not match issuer host '%s'", parsedToken.Hostname(), parsedIssuer.Hostname()),
+				Details: fmt.Sprintf("Token endpoint origin '%s://%s' does not match issuer origin '%s://%s'", parsedToken.Scheme, parsedToken.Host, parsedIssuer.Scheme, parsedIssuer.Host),
 			})
 		} else {
 			t0 := time.Now()

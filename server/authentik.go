@@ -117,6 +117,9 @@ func (p *Plugin) syncAdminRole(user *model.User, userInfo *AuthentikUserInfo, co
 	if !config.SyncAdminRole {
 		return nil
 	}
+	if !config.GrantAuthentikAdmins && strings.TrimSpace(config.AdminGroup) == "" {
+		return nil
+	}
 
 	isInAdminGroup := false
 	if config.GrantAuthentikAdmins && hasGroup(userInfo.Groups, "authentik Admins") {

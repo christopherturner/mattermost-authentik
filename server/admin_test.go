@@ -294,7 +294,7 @@ func TestHandleDiagnoseConnection(t *testing.T) {
 		}
 		require.NotNil(t, jwksStep)
 		assert.Equal(t, "error", jwksStep.Status)
-		assert.Contains(t, jwksStep.Details, "does not match issuer host")
+		assert.Contains(t, jwksStep.Details, "does not match issuer origin")
 	})
 
 	t.Run("successful full diagnostic", func(t *testing.T) {

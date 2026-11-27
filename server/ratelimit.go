@@ -49,7 +49,7 @@ func (l *ipRateLimiter) Allow(key string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	if len(l.buckets) > rateLimiterMaxBuckets {
+	if len(l.buckets) >= rateLimiterMaxBuckets {
 		for k, b := range l.buckets {
 			if now.Sub(b.windowStart) >= l.window {
 				delete(l.buckets, k)
@@ -58,11 +58,20 @@ func (l *ipRateLimiter) Allow(key string) bool {
 	}
 
 	b, exists := l.buckets[key]
-	if !exists || now.Sub(b.windowStart) >= l.window {
+	if !exists {
+		if len(l.buckets) >= rateLimiterMaxBuckets {
+			return false
+		}
 		l.buckets[key] = &rateBucket{
 			count:       1,
 			windowStart: now,
 		}
+		return true
+	}
+
+	if now.Sub(b.windowStart) >= l.window {
+		b.count = 1
+		b.windowStart = now
 		return true
 	}
 

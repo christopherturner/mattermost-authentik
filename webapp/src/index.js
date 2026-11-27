@@ -84,9 +84,19 @@ class PluginClass {
         return this.pluginConfig || {};
     }
 
-    injectLoginButtonFallback() {
+    isLoginRoute() {
+        if (typeof window === 'undefined') {
+            return false;
+        }
         const pathname = window.location.pathname;
-        if (!pathname.startsWith('/login') && !pathname.includes('/login')) {
+        if (pathname.includes('/channels/')) {
+            return false;
+        }
+        return pathname === '/login' || pathname.endsWith('/login');
+    }
+
+    injectLoginButtonFallback() {
+        if (!this.isLoginRoute()) {
             return;
         }
 
@@ -540,12 +550,14 @@ class PluginClass {
     }
 
     isAutoRedirectEligible() {
-        if (!this.initialized || typeof window === 'undefined') {
+        if (!this.initialized || !this.isLoginRoute()) {
             return false;
         }
-        const pathname = window.location.pathname;
-        if (!pathname.startsWith('/login') && !pathname.includes('/login')) {
-            return false;
+        if (this.store) {
+            const state = this.store.getState();
+            if (state && state.entities && state.entities.users && state.entities.users.currentUserId) {
+                return false;
+            }
         }
         const params = new URLSearchParams(window.location.search);
         if (params.has('no_sso') || params.has('error')) {

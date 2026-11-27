@@ -114,9 +114,9 @@ func (p *Plugin) handleOAuth2Connect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	signedState := p.signState(stateToken)
-	if signedState == "" {
-		p.API.LogError("OAuth state signing key is not initialized")
+	signedState, err := p.signState(stateToken)
+	if err != nil {
+		p.API.LogError("OAuth state signing key is not initialized", "error", err.Error())
 		http.Error(w, "Internal error", http.StatusInternalServerError)
 		return
 	}
@@ -572,14 +572,14 @@ func (p *Plugin) updateUserIfChanged(user *model.User, info *AuthentikUserInfo) 
 	return updatedUser, nil
 }
 
-func (p *Plugin) signState(token string) string {
+func (p *Plugin) signState(token string) (string, error) {
 	key := p.getEncryptionKey()
 	if key == "" {
-		return ""
+		return "", fmt.Errorf("encryption key not initialized")
 	}
 	mac := hmac.New(sha256.New, []byte(key))
 	mac.Write([]byte(token))
-	return token + ":" + hex.EncodeToString(mac.Sum(nil))
+	return token + ":" + hex.EncodeToString(mac.Sum(nil)), nil
 }
 
 func (p *Plugin) verifyAndExtractState(signedState string) (string, error) {
@@ -588,12 +588,11 @@ func (p *Plugin) verifyAndExtractState(signedState string) (string, error) {
 		return "", fmt.Errorf("malformed state parameter")
 	}
 
-	if p.getEncryptionKey() == "" {
-		return "", fmt.Errorf("encryption key not initialized")
-	}
-
 	token := parts[0]
-	expected := p.signState(token)
+	expected, err := p.signState(token)
+	if err != nil {
+		return "", err
+	}
 	if !hmac.Equal([]byte(signedState), []byte(expected)) {
 		return "", fmt.Errorf("state signature mismatch")
 	}
