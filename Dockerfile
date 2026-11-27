@@ -5,7 +5,7 @@ COPY webapp/package.json webapp/webpack.config.js ./
 COPY webapp/src ./src
 RUN npm install && npm run build
 
-FROM golang:1.24-alpine AS server-builder
+FROM golang:1.27-alpine AS server-builder
 WORKDIR /app
 RUN apk add --no-cache make git bash
 COPY server ./server
