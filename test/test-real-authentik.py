@@ -154,6 +154,12 @@ def setup_authentik():
     if not admin_group:
         raise RuntimeError(f"Group '{ADMIN_GROUP_NAME}' not found in Authentik.")
 
+    if akadmin:
+        try:
+            ak_api(f"/core/groups/{admin_group['pk']}/add_user/", {"pk": akadmin["pk"]}, method="POST")
+        except Exception:
+            pass
+
     return {
         "admin_user_pk": akadmin["pk"] if akadmin else None,
         "std_user_pk": stduser_pk,
