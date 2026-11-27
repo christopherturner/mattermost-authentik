@@ -136,7 +136,7 @@ MM_PLUGINSETTINGS_ENABLEUPLOADS=true
 ### Step 1: Upload the Plugin Bundle
 1. In the release assets or your `dist/` directory, locate:
    ```text
-   io.christopherturner.mattermost-authentik-1.2.1.tar.gz
+   io.christopherturner.mattermost-authentik-1.3.0.tar.gz
    ```
 2. In Mattermost, go to **System Console** > **Plugins** > **Plugin Management**.
 3. Under **Upload Plugin**, choose the `.tar.gz` bundle and click **Upload**.
@@ -201,7 +201,7 @@ make bundle
 ```
 The compiled bundle will be available at:
 ```text
-dist/io.christopherturner.mattermost-authentik-1.2.1.tar.gz
+dist/io.christopherturner.mattermost-authentik-1.3.0.tar.gz
 ```
 
 ### Docker Build (No local Go/Node required)
