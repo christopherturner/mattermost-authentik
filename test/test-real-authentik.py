@@ -10,6 +10,7 @@ It is not affiliated with, sponsored by, or endorsed by Mattermost or Authentik.
 """
 
 import os
+import re
 import time
 import json
 import subprocess
@@ -235,15 +236,28 @@ def execute_login(username, password):
     except urllib.error.HTTPError as e:
         cb_url = urllib.parse.urljoin(AUTHENTIK_URL, e.headers.get("Location") or "")
 
+    if "/oauth2/callback" not in cb_url:
+        raise RuntimeError(f"Expected Mattermost callback URL for {username}, got: {cb_url}")
+
     # Step 4: Mattermost callback
+    cb_status = None
+    cb_body = ""
     try:
-        opener.open(cb_url)
-    except urllib.error.HTTPError:
-        pass
+        cb_resp = opener.open(cb_url)
+        cb_status = cb_resp.status
+    except urllib.error.HTTPError as e:
+        cb_status = e.code
+        if e.code >= 400:
+            raw_body = e.read().decode("utf-8", errors="ignore")
+            m = re.search(r"<p>(.*?)</p>", raw_body, re.S)
+            cb_body = m.group(1) if m else raw_body[-500:]
 
     cookies: dict[str, str] = {c.name: c.value or "" for c in cj}
     if not cookies.get("MMAUTHTOKEN"):
-        raise RuntimeError(f"Authentication failed: MMAUTHTOKEN cookie was not issued for {username}.")
+        raise RuntimeError(
+            f"Authentication failed: MMAUTHTOKEN cookie was not issued for {username} "
+            f"(callback HTTP {cb_status}, cookies={list(cookies.keys())}, body={cb_body!r})."
+        )
 
     cookie_header = "; ".join(f"{k}={v}" for k, v in cookies.items())
     opener.addheaders = [("Cookie", cookie_header)]

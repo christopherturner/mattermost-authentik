@@ -113,6 +113,13 @@ jobs:
         run: |
           ls -lh dist/io.christopherturner.mattermost-authentik-*.tar.gz
 
+      - name: Upload plugin bundle artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: plugin-bundle
+          path: dist/io.christopherturner.mattermost-authentik-*.tar.gz
+          retention-days: 1
+
   integration-mock:
     name: Mock Authentik E2E Integration
     runs-on: ubuntu-24.04
@@ -121,21 +128,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Set up Go
-        uses: actions/setup-go@v7
+      - name: Download plugin bundle artifact
+        uses: actions/download-artifact@v8
         with:
-          go-version: '1.27.x'
-          cache-dependency-path: server/go.sum
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: webapp/package-lock.json
-
-      - name: Build plugin bundle
-        run: make bundle
+          name: plugin-bundle
+          path: dist
 
       - name: Start mock Authentik and Mattermost stack
         run: docker compose -f test/docker-compose.yml up --build -d
@@ -175,21 +172,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Set up Go
-        uses: actions/setup-go@v7
+      - name: Download plugin bundle artifact
+        uses: actions/download-artifact@v8
         with:
-          go-version: '1.27.x'
-          cache-dependency-path: server/go.sum
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: webapp/package-lock.json
-
-      - name: Build plugin bundle
-        run: make bundle
+          name: plugin-bundle
+          path: dist
 
       - name: Start real Authentik and Mattermost stack
         run: docker compose -f test/docker-compose.real-authentik.yml up -d
@@ -215,6 +202,10 @@ jobs:
 
       - name: Run real Authentik E2E tests
         run: python3 test/test-real-authentik.py
+
+      - name: Dump Mattermost logs on failure
+        if: failure()
+        run: docker compose -f test/docker-compose.real-authentik.yml logs --tail=80 mattermost
 
       - name: Tear down real Authentik containers
         if: always()
