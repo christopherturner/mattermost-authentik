@@ -77,14 +77,14 @@ def setup_authentik():
 
     # 3. Fetch and Configure Scope Mappings
     mappings = ak_api("/propertymappings/provider/scope/")["results"]
-    email_mapping = next((m for m in mappings if m["scope_name"] == "email"), None)
-    if email_mapping:
-        ak_api(f"/propertymappings/provider/scope/{email_mapping['pk']}/", {
-            "name": email_mapping["name"],
+    verified_email_mapping = next((m for m in mappings if m["name"] == "Mattermost Verified Email Mapping"), None)
+    if not verified_email_mapping:
+        verified_email_mapping = ak_api("/propertymappings/provider/scope/", {
+            "name": "Mattermost Verified Email Mapping",
             "scope_name": "email",
             "expression": "return {\n    \"email\": request.user.email,\n    \"email_verified\": True\n}"
-        }, method="PATCH")
-    scope_pks = [m["pk"] for m in mappings if m["scope_name"] in ["openid", "email", "profile"]]
+        }, method="POST")
+    scope_pks = [m["pk"] for m in mappings if m["scope_name"] in ["openid", "profile"]] + [verified_email_mapping["pk"]]
 
     # 4. Create or Update OAuth2 Provider
     providers = ak_api("/providers/oauth2/")["results"]

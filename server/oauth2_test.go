@@ -468,3 +468,98 @@ func TestGetOrCreateUser_EmailVerifiedDefault(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, user.EmailVerified)
 }
+
+func TestAutoLinkByEmail(t *testing.T) {
+	t.Run("links existing user when AutoLinkByEmail is true and email is verified", func(t *testing.T) {
+		p, api := setupTestPluginWithAPI()
+		api.On("LogInfo", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Maybe()
+		api.On("KVGet", KVUserPrefix+"sub-link-1").Return(nil, nil)
+		api.On("GetUserByEmail", "existing@example.com").Return(&model.User{
+			Id:          "mm-existing",
+			Email:       "existing@example.com",
+			FirstName:   "Existing",
+			LastName:    "User",
+			AuthService: "",
+		}, nil)
+		api.On("UpdateUserAuth", "mm-existing", mock.MatchedBy(func(auth *model.UserAuth) bool {
+			return auth.AuthService == AuthService && auth.AuthData != nil && *auth.AuthData == "sub-link-1"
+		})).Return(&model.UserAuth{}, nil)
+		api.On("KVSet", KVUserPrefix+"sub-link-1", []byte("mm-existing")).Return(nil)
+		api.On("UpdateUser", mock.AnythingOfType("*model.User")).Return(&model.User{
+			Id:            "mm-existing",
+			Email:         "existing@example.com",
+			EmailVerified: true,
+		}, nil)
+
+		verified := true
+		user, err := p.getOrCreateUser(&AuthentikUserInfo{
+			Subject:       "sub-link-1",
+			Email:         "existing@example.com",
+			Username:      "existing",
+			FirstName:     "Existing",
+			LastName:      "User",
+			EmailVerified: &verified,
+		}, &Configuration{
+			AutoLinkByEmail: true,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "mm-existing", user.Id)
+		api.AssertCalled(t, "UpdateUserAuth", "mm-existing", mock.Anything)
+	})
+
+	t.Run("rejects linking when AutoLinkByEmail is false", func(t *testing.T) {
+		p, api := setupTestPluginWithAPI()
+		api.On("KVGet", KVUserPrefix+"sub-link-2").Return(nil, nil)
+		api.On("GetUserByEmail", "existing@example.com").Return(&model.User{
+			Id:    "mm-existing",
+			Email: "existing@example.com",
+		}, nil)
+
+		verified := true
+		_, err := p.getOrCreateUser(&AuthentikUserInfo{
+			Subject:       "sub-link-2",
+			Email:         "existing@example.com",
+			EmailVerified: &verified,
+		}, &Configuration{
+			AutoLinkByEmail: false,
+		})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "auto-linking is disabled")
+	})
+
+	t.Run("rejects linking when email is not verified", func(t *testing.T) {
+		p, api := setupTestPluginWithAPI()
+		api.On("KVGet", KVUserPrefix+"sub-link-3").Return(nil, nil)
+		api.On("GetUserByEmail", "existing@example.com").Return(&model.User{
+			Id:    "mm-existing",
+			Email: "existing@example.com",
+		}, nil)
+
+		unverified := false
+		_, err := p.getOrCreateUser(&AuthentikUserInfo{
+			Subject:       "sub-link-3",
+			Email:         "existing@example.com",
+			EmailVerified: &unverified,
+		}, &Configuration{
+			AutoLinkByEmail:      true,
+			RequireEmailVerified: false,
+		})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "not verified")
+	})
+}
+
+func TestOnActivate(t *testing.T) {
+	p := &Plugin{}
+	api := &plugintest.API{}
+	api.On("KVGet", KVEncryptionKey).Return(nil, nil)
+	api.On("KVSet", KVEncryptionKey, mock.AnythingOfType("[]uint8")).Return(nil)
+	api.On("LogInfo", mock.Anything).Maybe()
+	p.SetAPI(api)
+	p.setConfiguration(&Configuration{Enable: false})
+
+	err := p.OnActivate()
+	require.NoError(t, err)
+	assert.NotEmpty(t, p.getEncryptionKey())
+	assert.NotNil(t, p.router)
+}

@@ -650,6 +650,8 @@ class PluginClass {
     }
 }
 
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && typeof window.registerPlugin === 'function') {
     window.registerPlugin(PLUGIN_ID, new PluginClass());
 }
+
+export default PluginClass;

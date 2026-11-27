@@ -162,6 +162,45 @@ def run_test(user_type="admin"):
                 print(f"   [FAILED] Unexpected status code {e.code}")
                 sys.exit(1)
 
+    return opener, cookies
+
+
+def test_slo_logout(opener):
+    print("\n>>> Phase 5: Test OIDC Logout Endpoint & Session Revocation")
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            return None
+
+    logout_opener = urllib.request.build_opener(NoRedirect())
+    cookie_header = next((v for k, v in opener.addheaders if k == "Cookie"), "")
+    logout_req = urllib.request.Request(
+        "http://localhost:8065/plugins/io.christopherturner.mattermost-authentik/oauth2/logout",
+        headers={"Cookie": cookie_header},
+    )
+    location = ""
+    try:
+        resp = logout_opener.open(logout_req)
+        location = resp.geturl()
+    except urllib.error.HTTPError as e:
+        location = e.headers.get("Location") or ""
+
+    if "/login?no_sso=1" not in location:
+        print(f"   [FAILED] Expected redirect to /login?no_sso=1, got: {location}")
+        sys.exit(1)
+    print(f"   [PASS] /oauth2/logout redirected to: {location}")
+
+    try:
+        opener.open(urllib.request.Request("http://localhost:8065/api/v4/users/me"))
+        print("   [FAILED] Session remained valid after /oauth2/logout!")
+        sys.exit(1)
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            print("   [PASS] Session revoked after /oauth2/logout (HTTP 401 on /api/v4/users/me).")
+        else:
+            print(f"   [FAILED] Unexpected status code after logout: {e.code}")
+            sys.exit(1)
+
+
 if __name__ == "__main__":
     user_arg = sys.argv[1] if len(sys.argv) > 1 else "all"
     if user_arg == "admin":
@@ -171,7 +210,7 @@ if __name__ == "__main__":
     elif user_arg == "demoted":
         run_test("demoted")
     else:
-        # Full lifecycle: promote -> demote -> re-promote -> standard user
+        # Full lifecycle: promote -> demote -> re-promote -> standard user -> SLO logout
         print("\n>>> Phase 1: Test Admin Promotion & Endpoint Privileges")
         run_test("admin")
         print("\n>>> Phase 2: Test Admin Revocation & Privilege Stripping")
@@ -179,5 +218,6 @@ if __name__ == "__main__":
         print("\n>>> Phase 3: Test Admin Re-Promotion")
         run_test("admin")
         print("\n>>> Phase 4: Test Standard Non-Admin User")
-        run_test("user")
+        user_opener, _ = run_test("user")
+        test_slo_logout(user_opener)
     print("\nAll end-to-end authentication & authorization tests passed successfully!\n")
