@@ -28,7 +28,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version-file: server/go.mod
+          go-version: '1.27.x'
           cache-dependency-path: server/go.sum
 
       - name: Run server unit tests (with race detector)
@@ -49,18 +49,7 @@ jobs:
       - name: Run govulncheck
         run: |
           cd server
-          set +e
-          out=$(go run golang.org/x/vuln/cmd/govulncheck@latest ./... 2>&1)
-          code=$?
-          set -e
-          echo "$out"
-          if [ $code -ne 0 ]; then
-            if echo "$out" | grep -q "affected by .* from the Go standard library" && ! echo "$out" | grep -qE "affected by .* in (packages you import|modules you require)"; then
-              echo "::notice::govulncheck findings are only in the Go standard library runtime, not called project dependencies."
-            else
-              exit $code
-            fi
-          fi
+          go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
   test-webapp:
     name: Webapp Build, Lint & Test
@@ -107,7 +96,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version-file: server/go.mod
+          go-version: '1.27.x'
           cache-dependency-path: server/go.sum
 
       - name: Set up Node.js
@@ -135,7 +124,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version-file: server/go.mod
+          go-version: '1.27.x'
           cache-dependency-path: server/go.sum
 
       - name: Set up Node.js
@@ -189,7 +178,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version-file: server/go.mod
+          go-version: '1.27.x'
           cache-dependency-path: server/go.sum
 
       - name: Set up Node.js
