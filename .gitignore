@@ -7,7 +7,6 @@ test/mock-authentik/authentik-mock
 
 # Dependencies
 webapp/node_modules/
-webapp/package-lock.json
 
 # Python
 __pycache__/
