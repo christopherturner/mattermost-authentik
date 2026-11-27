@@ -40,7 +40,8 @@ Designed to provide native Authentik authentication across **both Mattermost Tea
   - **Browser-bound State Cookie (`MMAUTHENTIKSTATE`)** preventing login CSRF.
   - **Standard Session Cookies:** Correctly sets `MMAUTHTOKEN`, `MMUSERID`, and `MMCSRF` matching Mattermost core session lifetime and subdomain settings.
   - **Verified Email Enforcement:** Auto-linking and logins enforce verified email confirmation from Authentik to prevent account takeover.
-  - **Server-Side SSO Enforcement:** Blocks standard password logins at the API layer via Mattermost's `UserWillLogIn` hook when SSO enforcement is active.
+  - **Server-Side SSO Enforcement:** Blocks standard password logins at the API layer via Mattermost's `UserWillLogIn` hook when SSO enforcement is active, with optional automatic login page redirection (`?no_sso=1` bypass).
+  - **Single Logout (OIDC SLO):** Optional RP-initiated logout (`end_session_endpoint`) and OIDC Back-Channel Logout (`/oauth2/backchannel-logout`) session revocation.
   - **Transport Security Validation:** Strict issuer validation rejecting non-loopback cleartext HTTP URLs.
 - **Desktop & Mobile App Support:**
   - Handles the Mattermost Desktop App (Electron) using a popup flow with `localStorage` cross-window event synchronization (bypassing Cross-Origin Opener Policy / COOP navigation blocks).
@@ -148,6 +149,9 @@ In the System Console, navigate to **Plugins** > **Authentik for Mattermost** in
 |---|---|---|
 | **Enable Authentik Authentication** | `true` | Turn the SSO integration on/off. |
 | **Enforce Authentik SSO (Disable Username/Password Sign-In)** | `false` | When enabled, automatically disables standard email/password login across Mattermost so all users must authenticate via Authentik SSO. Make sure you have a working Authentik admin before enabling. |
+| **Auto-Redirect to Authentik on Login** | `false` | When enabled alongside **Enforce Authentik SSO**, automatically redirects browser users from `/login` to Authentik without a button click (append `?no_sso=1` to bypass). |
+| **Enable Single Logout (OIDC SLO)** | `false` | When enabled, signing out of Mattermost redirects Authentik users to Authentik's `end_session_endpoint`, and Back-Channel Logout requests revoke active Mattermost sessions. |
+| **Authentik Integration URLs** | *(Copy helper)* | Displays and one-click copies the OAuth2 Callback Redirect URI and Back-Channel Logout URI for Authentik configuration. |
 | **Authentik Base URL** | `https://authentik.company` | Base URL of your Authentik instance. |
 | **Authentik Application Slug** | `mattermost` | Matches the slug configured in Authentik (used to discover OIDC endpoints). |
 | **Custom Issuer / Discovery URL (Optional)** | *(Leave blank)* | Optional override if using a non-standard OIDC endpoint. |

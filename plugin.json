@@ -39,6 +39,26 @@
                 "default": false
             },
             {
+                "key": "AutoRedirectSSO",
+                "display_name": "Auto-Redirect to Authentik on Login",
+                "type": "bool",
+                "help_text": "When enabled alongside Enforce Authentik SSO, automatically redirects browser users from the login page to Authentik without requiring a button click. Append ?no_sso=1 to /login to bypass.",
+                "default": false
+            },
+            {
+                "key": "EnableSLO",
+                "display_name": "Enable Single Logout (OIDC SLO)",
+                "type": "bool",
+                "help_text": "When enabled, signing out of Mattermost redirects Authentik users to Authentik's end_session_endpoint, and Back-Channel Logout requests from Authentik revoke active Mattermost sessions.",
+                "default": false
+            },
+            {
+                "key": "RedirectURIInfo",
+                "display_name": "Authentik Integration URLs",
+                "type": "custom",
+                "help_text": "Copy these URLs into your Authentik OAuth2/OpenID Provider configuration."
+            },
+            {
                 "key": "AuthentikURL",
                 "display_name": "Authentik Base URL",
                 "type": "text",
@@ -74,6 +94,7 @@
                 "key": "ClientSecret",
                 "display_name": "Client Secret",
                 "type": "text",
+                "secret": true,
                 "help_text": "The Client Secret copied from the OAuth2 Provider in Authentik.",
                 "placeholder": "Enter your Authentik Client Secret",
                 "default": ""

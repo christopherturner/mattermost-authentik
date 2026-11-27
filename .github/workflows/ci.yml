@@ -42,16 +42,14 @@ jobs:
           go vet ./...
 
       - name: Run staticcheck
-        uses: dominikh/staticcheck-action@v1
-        with:
-          version: "latest"
-          working-directory: "server"
+        run: |
+          cd server
+          go run honnef.co/go/tools/cmd/staticcheck@latest ./...
 
       - name: Run govulncheck
-        uses: golang/govulncheck-action@v1
-        with:
-          go-version-file: "server/go.mod"
-          work-dir: "server"
+        run: |
+          cd server
+          go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
   test-webapp:
     name: Webapp Build, Lint & Test

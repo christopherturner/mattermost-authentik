@@ -406,6 +406,8 @@ func TestHandleOAuth2Callback(t *testing.T) {
 			Roles:         model.SystemUserRoleId,
 		}, nil)
 		api.On("KVSet", KVUserPrefix+"sub-123", []byte("mm-user-1")).Return(nil)
+		api.On("KVGet", KVUserSessionsPrefix+"mm-user-1").Return(nil, nil)
+		api.On("KVSetWithExpiry", KVUserSessionsPrefix+"mm-user-1", mock.Anything, mock.AnythingOfType("int64")).Return(nil)
 		api.On("CreateSession", mock.AnythingOfType("*model.Session")).Return(&model.Session{
 			Id:        "sess-1",
 			Token:     "tok-secret",

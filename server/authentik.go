@@ -20,7 +20,6 @@ type AuthentikUserInfo struct {
 	Username      string   `json:"username"`
 	FirstName     string   `json:"first_name"`
 	LastName      string   `json:"last_name"`
-	Position      string   `json:"position,omitempty"`
 	EmailVerified *bool    `json:"email_verified,omitempty"`
 	Groups        []string `json:"groups,omitempty"`
 }

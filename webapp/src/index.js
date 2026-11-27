@@ -4,6 +4,8 @@ import AuthentikLoginButton from './components/AuthentikLoginButton';
 import LDAPAccountManager from './components/LDAPAccountManager';
 import ConnectionDiagnostic from './components/ConnectionDiagnostic';
 import ScopeSelector from './components/ScopeSelector';
+import RedirectURIHelper from './components/RedirectURIHelper';
+import { getSafeRedirectPath } from './utils/redirect';
 
 const PLUGIN_ID = 'io.christopherturner.mattermost-authentik';
 
@@ -16,6 +18,7 @@ class PluginClass {
 
     initialize(registry, store) {
         this.store = store;
+        this.initialized = true;
 
         // Fetch plugin config eagerly so brand colors and settings are readily available
         this.fetchPluginConfig();
@@ -30,7 +33,10 @@ class PluginClass {
             registry.registerAdminConsoleCustomSetting('LDAPAccountManager', LDAPAccountManager);
             registry.registerAdminConsoleCustomSetting('ConnectionDiagnostic', ConnectionDiagnostic);
             registry.registerAdminConsoleCustomSetting('Scope', ScopeSelector);
+            registry.registerAdminConsoleCustomSetting('RedirectURIInfo', RedirectURIHelper);
         }
+
+        this.setupLogoutInterceptor();
 
         // Start DOM observer for:
         // 1. Fallback login button injection (if not mounted by registry)
@@ -83,6 +89,8 @@ class PluginClass {
         if (!pathname.startsWith('/login') && !pathname.includes('/login')) {
             return;
         }
+
+        this.maybeAutoRedirectSSO();
 
         // 1. Check if Mattermost rendered the "No sign-in methods enabled" empty state screen
         const bodyText = (document.body && document.body.innerText) || '';
@@ -531,7 +539,79 @@ class PluginClass {
             .replace(/'/g, '&#39;');
     }
 
+    isAutoRedirectEligible() {
+        if (!this.initialized || typeof window === 'undefined') {
+            return false;
+        }
+        const pathname = window.location.pathname;
+        if (!pathname.startsWith('/login') && !pathname.includes('/login')) {
+            return false;
+        }
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('no_sso') || params.has('error')) {
+            return false;
+        }
+        const ua = (window.navigator && window.navigator.userAgent) || '';
+        if (ua.indexOf('Mattermost') !== -1 && ua.indexOf('Electron') !== -1) {
+            return false;
+        }
+        return true;
+    }
+
+    maybeAutoRedirectSSO() {
+        if (this.autoRedirectAttempted || !this.isAutoRedirectEligible()) {
+            return;
+        }
+
+        this.autoRedirectAttempted = true;
+        this.fetchPluginConfig().then((cfg) => {
+            if (cfg && cfg.enable && cfg.auto_redirect_sso && this.isAutoRedirectEligible()) {
+                const safePath = getSafeRedirectPath();
+                window.location.replace(`/plugins/${PLUGIN_ID}/oauth2/connect?return_to=${encodeURIComponent(safePath)}`);
+            }
+        });
+    }
+
+    setupLogoutInterceptor() {
+        if (typeof window === 'undefined' || typeof window.fetch !== 'function' || this.originalFetch) {
+            return;
+        }
+
+        const originalFetch = window.fetch.bind(window);
+        this.originalFetch = originalFetch;
+
+        window.fetch = async (input, init) => {
+            const urlStr = typeof input === 'string' ? input : (input && input.url) || '';
+            const isLogoutCall = urlStr.includes('/api/v4/users/logout');
+
+            let isAuthentikUser = false;
+            if (isLogoutCall && this.store) {
+                const state = this.store.getState();
+                const uid = state?.entities?.users?.currentUserId;
+                const user = uid && state?.entities?.users?.profiles?.[uid];
+                isAuthentikUser = Boolean(user && user.auth_service === 'authentik');
+            }
+
+            const response = await originalFetch(input, init);
+
+            if (isLogoutCall && isAuthentikUser && response && response.ok) {
+                const cfg = await this.fetchPluginConfig();
+                if (cfg && cfg.enable_slo) {
+                    window.location.assign(`/plugins/${PLUGIN_ID}/oauth2/logout`);
+                }
+            }
+
+            return response;
+        };
+    }
+
     uninitialize() {
+        this.initialized = false;
+        if (this.originalFetch && typeof window !== 'undefined') {
+            window.fetch = this.originalFetch;
+            this.originalFetch = null;
+        }
+
         if (this.observer) {
             this.observer.disconnect();
             this.observer = null;

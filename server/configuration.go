@@ -14,6 +14,8 @@ import (
 type Configuration struct {
 	Enable               bool   `json:"Enable"`
 	EnforceSSO           bool   `json:"EnforceSSO"`
+	AutoRedirectSSO      bool   `json:"AutoRedirectSSO"`
+	EnableSLO            bool   `json:"EnableSLO"`
 	AuthentikURL         string `json:"AuthentikURL"`
 	ApplicationSlug      string `json:"ApplicationSlug"`
 	IssuerURL            string `json:"IssuerURL"`

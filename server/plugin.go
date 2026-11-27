@@ -6,7 +6,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -50,15 +49,17 @@ type Plugin struct {
 
 	encryptionKey string
 
-	oidcProvider *oidc.Provider
-	oauth2Config *oauth2.Config
-	oidcVerifier *oidc.IDTokenVerifier
+	oidcProvider       *oidc.Provider
+	oauth2Config       *oauth2.Config
+	oidcVerifier       *oidc.IDTokenVerifier
+	endSessionEndpoint string
 
 	retryLock          sync.Mutex
 	lastDiscoveryRetry time.Time
 
-	connectLimiterOnce sync.Once
-	connectLimiter     *ipRateLimiter
+	connectLimiterOnce   sync.Once
+	connectLimiter       *ipRateLimiter
+	connectGlobalLimiter *ipRateLimiter
 
 	router *mux.Router
 }
@@ -86,7 +87,6 @@ func (p *Plugin) OnActivate() error {
 	p.encryptionKey = key
 	p.configurationLock.Unlock()
 
-	p.cleanExpiredOAuthStates()
 	p.setupRouter()
 	p.ensureClientBundleAvailable()
 
@@ -123,6 +123,7 @@ func (p *Plugin) OnConfigurationChange() error {
 		p.oidcProvider = nil
 		p.oauth2Config = nil
 		p.oidcVerifier = nil
+		p.endSessionEndpoint = ""
 		p.configurationLock.Unlock()
 	}
 
@@ -158,6 +159,8 @@ func (p *Plugin) setupRouter() {
 	// OAuth2 flow
 	r.HandleFunc("/oauth2/connect", p.handleOAuth2Connect).Methods(http.MethodGet)
 	r.HandleFunc("/oauth2/callback", p.handleOAuth2Callback).Methods(http.MethodGet)
+	r.HandleFunc("/oauth2/logout", p.handleOAuth2Logout).Methods(http.MethodGet)
+	r.HandleFunc("/oauth2/backchannel-logout", p.handleBackChannelLogout).Methods(http.MethodPost)
 
 	// Admin endpoints for LDAP account management
 	r.HandleFunc("/api/v1/admin/ldap-users", p.handleGetLDAPUsers).Methods(http.MethodGet)
@@ -228,35 +231,7 @@ func (p *Plugin) getEncryptionKey() string {
 			return p.encryptionKey
 		}
 	}
-	return "authentik_default_ephemeral_key"
-}
-
-// cleanExpiredOAuthStates asynchronously removes stale OAuth state tokens from the KV store.
-func (p *Plugin) cleanExpiredOAuthStates() {
-	go func() {
-		if p.API == nil {
-			return
-		}
-		for page := 0; ; page++ {
-			keys, appErr := p.API.KVList(page, 100)
-			if appErr != nil || len(keys) == 0 {
-				break
-			}
-			for _, k := range keys {
-				if strings.HasPrefix(k, KVOAuthStatePrefix) {
-					if val, getErr := p.API.KVGet(k); getErr == nil && val != nil {
-						var st OAuthState
-						if json.Unmarshal(val, &st) == nil && time.Since(time.UnixMilli(st.CreateAt)) > stateExpiry {
-							_ = p.API.KVDelete(k)
-						}
-					}
-				}
-			}
-			if len(keys) < 100 {
-				break
-			}
-		}
-	}()
+	return ""
 }
 
 func (p *Plugin) getOAuthConfig() *oauth2.Config {
@@ -275,6 +250,12 @@ func (p *Plugin) getOIDCProvider() *oidc.Provider {
 	p.configurationLock.RLock()
 	defer p.configurationLock.RUnlock()
 	return p.oidcProvider
+}
+
+func (p *Plugin) getEndSessionEndpoint() string {
+	p.configurationLock.RLock()
+	defer p.configurationLock.RUnlock()
+	return p.endSessionEndpoint
 }
 
 // getHTTPClient returns an http.Client configured with optional custom Root CA or SkipTLSVerify.
@@ -365,10 +346,16 @@ func (p *Plugin) initOIDCProvider(cfg *Configuration) error {
 		ClientID: cfg.ClientID,
 	})
 
+	var discoveryClaims struct {
+		EndSessionEndpoint string `json:"end_session_endpoint"`
+	}
+	_ = provider.Claims(&discoveryClaims)
+
 	p.configurationLock.Lock()
 	p.oidcProvider = provider
 	p.oauth2Config = oauthConfig
 	p.oidcVerifier = verifier
+	p.endSessionEndpoint = strings.TrimSpace(discoveryClaims.EndSessionEndpoint)
 	p.configurationLock.Unlock()
 
 	return nil

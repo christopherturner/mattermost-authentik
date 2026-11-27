@@ -53,24 +53,29 @@ func (p *Plugin) handleGetPublicConfig(w http.ResponseWriter, r *http.Request) {
 	config := p.getConfiguration()
 
 	publicConfig := map[string]interface{}{
-		"enable":       config.Enable && config.IsValid() == nil,
-		"enforce_sso":  config.EnforceSSO,
-		"button_text":  config.ButtonText,
-		"button_color": config.ButtonColor,
+		"enable":            config.Enable && config.IsValid() == nil,
+		"enforce_sso":       config.EnforceSSO,
+		"auto_redirect_sso": config.EnforceSSO && config.AutoRedirectSSO,
+		"enable_slo":        config.EnableSLO,
+		"button_text":       config.ButtonText,
+		"button_color":      config.ButtonColor,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(publicConfig)
 }
 
-// allowConnectRequest enforces per-IP rate limiting on /oauth2/connect to prevent KV store flooding.
+// allowConnectRequest enforces per-IP and global rate limiting on /oauth2/connect to prevent KV store flooding.
 func (p *Plugin) allowConnectRequest(r *http.Request) bool {
 	p.connectLimiterOnce.Do(func() {
 		if p.connectLimiter == nil {
 			p.connectLimiter = newIPRateLimiter(connectRateLimitMax, connectRateLimitWindow)
 		}
+		if p.connectGlobalLimiter == nil {
+			p.connectGlobalLimiter = newIPRateLimiter(connectGlobalRateLimitMax, connectRateLimitWindow)
+		}
 	})
-	return p.connectLimiter.Allow(getClientIP(r))
+	return p.connectLimiter.Allow(getClientIP(r)) && p.connectGlobalLimiter.Allow("global")
 }
 
 // handleOAuth2Connect initiates the Authentik OIDC login flow.
@@ -110,6 +115,11 @@ func (p *Plugin) handleOAuth2Connect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	signedState := p.signState(stateToken)
+	if signedState == "" {
+		p.API.LogError("OAuth state signing key is not initialized")
+		http.Error(w, "Internal error", http.StatusInternalServerError)
+		return
+	}
 
 	returnTo := r.URL.Query().Get("return_to")
 	if returnTo == "" || !strings.HasPrefix(returnTo, "/") || strings.HasPrefix(returnTo, "//") || strings.ContainsRune(returnTo, '\\') {
@@ -355,6 +365,12 @@ func (p *Plugin) handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var sidClaims struct {
+		SID string `json:"sid"`
+	}
+	_ = idToken.Claims(&sidClaims)
+	p.trackUserSession(mmUser.Id, session.Id, sidClaims.SID, session.ExpiresAt)
+
 	if isMobile {
 		p.renderMobileAuthComplete(w, state.MobileRedirect, session.Token, csrfToken)
 		return
@@ -557,7 +573,11 @@ func (p *Plugin) updateUserIfChanged(user *model.User, info *AuthentikUserInfo) 
 }
 
 func (p *Plugin) signState(token string) string {
-	mac := hmac.New(sha256.New, []byte(p.getEncryptionKey()))
+	key := p.getEncryptionKey()
+	if key == "" {
+		return ""
+	}
+	mac := hmac.New(sha256.New, []byte(key))
 	mac.Write([]byte(token))
 	return token + ":" + hex.EncodeToString(mac.Sum(nil))
 }
@@ -566,6 +586,10 @@ func (p *Plugin) verifyAndExtractState(signedState string) (string, error) {
 	parts := strings.SplitN(signedState, ":", 2)
 	if len(parts) != 2 {
 		return "", fmt.Errorf("malformed state parameter")
+	}
+
+	if p.getEncryptionKey() == "" {
+		return "", fmt.Errorf("encryption key not initialized")
 	}
 
 	token := parts[0]

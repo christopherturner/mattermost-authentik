@@ -9,9 +9,10 @@ import (
 )
 
 const (
-	connectRateLimitMax    = 30
-	connectRateLimitWindow = time.Minute
-	rateLimiterMaxBuckets  = 1000
+	connectRateLimitMax       = 30
+	connectGlobalRateLimitMax = 300
+	connectRateLimitWindow    = time.Minute
+	rateLimiterMaxBuckets     = 1000
 )
 
 type rateBucket struct {

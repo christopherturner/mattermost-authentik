@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- OIDC Single Logout (SLO): RP-initiated logout via discovered `end_session_endpoint` (`GET /oauth2/logout`) and OIDC Back-Channel Logout (`POST /oauth2/backchannel-logout`) session revocation (`EnableSLO` setting).
+- Auto-Redirect SSO (`AutoRedirectSSO` setting) to automatically redirect browser users from `/login` to Authentik when `EnforceSSO` is active (bypassable via `?no_sso=1`).
+- System Console **Authentik Integration URLs** helper (`RedirectURIHelper`) to copy the OAuth2 Callback and Back-Channel Logout URLs, plus `secret: true` masking on `ClientSecret`.
+- Per-IP rate limiting on `/oauth2/connect` to protect the KV store from unauthenticated floods.
+- Webapp ESLint + Jest unit test suite and automated Mock & Real Authentik E2E integration jobs in CI.
+
+### Changed
+- Default `EmailVerified` on newly provisioned accounts to `false` unless explicitly confirmed (`email_verified: true`) by Authentik.
+- Tracked `webapp/package-lock.json` for reproducible `npm ci` builds and CI caching.
+
 ## [1.2.1] - 2026-11-21
 
 ### Security & Dependency Updates
