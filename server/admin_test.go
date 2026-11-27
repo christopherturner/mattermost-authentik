@@ -352,3 +352,84 @@ func TestHandleDiagnoseConnection(t *testing.T) {
 		}
 	})
 }
+
+func TestHandleUnlockLDAPUsers_AllAndFailure(t *testing.T) {
+	p, api := setupTestPluginWithAPI()
+
+	api.On("HasPermissionTo", "admin-user-id", model.PermissionManageSystem).Return(true)
+	api.On("LogInfo", mock.Anything, mock.Anything, mock.Anything).Maybe()
+	api.On("LogError", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Maybe()
+
+	ldapUser1 := &model.User{Id: "u1", AuthService: "ldap", DeleteAt: 0}
+	ldapUser2 := &model.User{Id: "u2", AuthService: "ldap", DeleteAt: 0}
+	api.On("GetUsers", mock.MatchedBy(func(opts *model.UserGetOptions) bool {
+		return opts.Page == 0
+	})).Return([]*model.User{ldapUser1, ldapUser2}, nil)
+
+	api.On("UpdateUserAuth", "u1", &model.UserAuth{AuthService: "", AuthData: nil}).Return(&model.UserAuth{}, nil)
+	api.On("UpdateUserAuth", "u2", &model.UserAuth{AuthService: "", AuthData: nil}).Return(nil, model.NewAppError("test", "err", nil, "", http.StatusInternalServerError))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/unlock-ldap", strings.NewReader(`{}`))
+	req.Header.Set("Mattermost-User-Id", "admin-user-id")
+	w := httptest.NewRecorder()
+	p.router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp struct {
+		Success  bool     `json:"success"`
+		Unlocked int      `json:"unlocked"`
+		Failed   []string `json:"failed"`
+	}
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	assert.True(t, resp.Success)
+	assert.Equal(t, 1, resp.Unlocked)
+	assert.Equal(t, []string{"u2"}, resp.Failed)
+}
+
+func TestHandleDeactivateLDAPUsers(t *testing.T) {
+	t.Run("deactivates specified user IDs", func(t *testing.T) {
+		p, api := setupTestPluginWithAPI()
+		api.On("HasPermissionTo", "admin-user-id", model.PermissionManageSystem).Return(true)
+		api.On("LogInfo", mock.Anything, mock.Anything, mock.Anything).Maybe()
+		api.On("UpdateUserActive", "u1", false).Return(nil)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/deactivate-ldap", strings.NewReader(`{"user_ids":["u1"]}`))
+		req.Header.Set("Mattermost-User-Id", "admin-user-id")
+		w := httptest.NewRecorder()
+		p.router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var resp struct {
+			Success     bool `json:"success"`
+			Deactivated int  `json:"deactivated"`
+		}
+		require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+		assert.True(t, resp.Success)
+		assert.Equal(t, 1, resp.Deactivated)
+	})
+
+	t.Run("deactivates all active LDAP users when user_ids empty", func(t *testing.T) {
+		p, api := setupTestPluginWithAPI()
+		api.On("HasPermissionTo", "admin-user-id", model.PermissionManageSystem).Return(true)
+		api.On("LogInfo", mock.Anything, mock.Anything, mock.Anything).Maybe()
+		api.On("GetUsers", mock.Anything).Return([]*model.User{
+			{Id: "u1", AuthService: "ldap", DeleteAt: 0},
+			{Id: "u2", AuthService: "authentik", DeleteAt: 0},
+		}, nil)
+		api.On("UpdateUserActive", "u1", false).Return(nil)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/deactivate-ldap", strings.NewReader(`{}`))
+		req.Header.Set("Mattermost-User-Id", "admin-user-id")
+		w := httptest.NewRecorder()
+		p.router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var resp struct {
+			Success     bool `json:"success"`
+			Deactivated int  `json:"deactivated"`
+		}
+		require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+		assert.True(t, resp.Success)
+		assert.Equal(t, 1, resp.Deactivated)
+	})
+}

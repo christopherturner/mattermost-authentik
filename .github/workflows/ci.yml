@@ -54,7 +54,7 @@ jobs:
           work-dir: "server"
 
   test-webapp:
-    name: Webapp Build & Lint
+    name: Webapp Build, Lint & Test
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
@@ -64,11 +64,23 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: webapp/package-lock.json
 
       - name: Install dependencies
         run: |
           cd webapp
-          npm install
+          npm ci
+
+      - name: Lint webapp
+        run: |
+          cd webapp
+          npm run lint
+
+      - name: Run webapp unit tests
+        run: |
+          cd webapp
+          npm test
 
       - name: Build webapp bundle
         run: |
@@ -93,6 +105,8 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: webapp/package-lock.json
 
       - name: Verify plugin cross-compilation & packaging
         run: make bundle
@@ -100,3 +114,110 @@ jobs:
       - name: Verify bundle artifact exists
         run: |
           ls -lh dist/io.christopherturner.mattermost-authentik-*.tar.gz
+
+  integration-mock:
+    name: Mock Authentik E2E Integration
+    runs-on: ubuntu-24.04
+    needs: [bundle-check]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: webapp/package-lock.json
+
+      - name: Build plugin bundle
+        run: make bundle
+
+      - name: Start mock Authentik and Mattermost stack
+        run: docker compose -f test/docker-compose.yml up --build -d
+
+      - name: Wait for Mattermost and Mock Authentik
+        run: |
+          until curl -sf http://localhost:8065/api/v4/system/ping > /dev/null; do sleep 2; done
+          until curl -sf http://localhost:9000/application/o/mattermost/.well-known/openid-configuration > /dev/null; do sleep 2; done
+
+      - name: Provision bootstrap admin and enable plugin
+        run: |
+          docker compose -f test/docker-compose.yml exec -T mattermost \
+            mmctl --local user create --email root@example.com --username rootadmin --password "RootPassword123!" --system-admin
+          BUNDLE=$(ls dist/io.christopherturner.mattermost-authentik-*.tar.gz | head -n1 | xargs basename)
+          docker compose -f test/docker-compose.yml exec -T mattermost \
+            mmctl --local plugin add "/dist/${BUNDLE}"
+          CONTAINER_ID=$(docker compose -f test/docker-compose.yml ps -q mattermost)
+          docker cp test/plugin-config.json "${CONTAINER_ID}:/tmp/config.json"
+          docker compose -f test/docker-compose.yml exec -T mattermost \
+            mmctl --local config patch /tmp/config.json
+          docker compose -f test/docker-compose.yml exec -T mattermost \
+            mmctl --local plugin enable io.christopherturner.mattermost-authentik
+
+      - name: Run E2E login lifecycle tests
+        run: python3 test/test-login.py
+
+      - name: Tear down test containers
+        if: always()
+        run: docker compose -f test/docker-compose.yml down -v
+
+  integration-real-authentik:
+    name: Real Authentik E2E Integration
+    runs-on: ubuntu-24.04
+    needs: [bundle-check]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: webapp/package-lock.json
+
+      - name: Build plugin bundle
+        run: make bundle
+
+      - name: Start real Authentik and Mattermost stack
+        run: docker compose -f test/docker-compose.real-authentik.yml up -d
+
+      - name: Wait for Authentik and Mattermost
+        run: |
+          for i in $(seq 1 90); do
+            if curl -sf http://localhost:9000/api/v3/root/config/ > /dev/null && curl -sf http://localhost:8065/api/v4/system/ping > /dev/null; then
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "Timed out waiting for Authentik and Mattermost"
+          exit 1
+
+      - name: Provision bootstrap admin and install plugin
+        run: |
+          docker compose -f test/docker-compose.real-authentik.yml exec -T mattermost \
+            mmctl --local user create --email root@example.com --username rootadmin --password "RootPassword123!" --system-admin
+          BUNDLE=$(ls dist/io.christopherturner.mattermost-authentik-*.tar.gz | head -n1 | xargs basename)
+          docker compose -f test/docker-compose.real-authentik.yml exec -T mattermost \
+            mmctl --local plugin add "/dist/${BUNDLE}"
+
+      - name: Run real Authentik E2E tests
+        run: python3 test/test-real-authentik.py
+
+      - name: Tear down real Authentik containers
+        if: always()
+        run: docker compose -f test/docker-compose.real-authentik.yml down -v

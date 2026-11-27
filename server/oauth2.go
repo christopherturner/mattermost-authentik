@@ -63,11 +63,28 @@ func (p *Plugin) handleGetPublicConfig(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(publicConfig)
 }
 
+// allowConnectRequest enforces per-IP rate limiting on /oauth2/connect to prevent KV store flooding.
+func (p *Plugin) allowConnectRequest(r *http.Request) bool {
+	p.connectLimiterOnce.Do(func() {
+		if p.connectLimiter == nil {
+			p.connectLimiter = newIPRateLimiter(connectRateLimitMax, connectRateLimitWindow)
+		}
+	})
+	return p.connectLimiter.Allow(getClientIP(r))
+}
+
 // handleOAuth2Connect initiates the Authentik OIDC login flow.
 func (p *Plugin) handleOAuth2Connect(w http.ResponseWriter, r *http.Request) {
 	config := p.getConfiguration()
 	if !config.Enable {
 		http.Error(w, "Authentik authentication is disabled", http.StatusBadRequest)
+		return
+	}
+
+	if !p.allowConnectRequest(r) {
+		p.API.LogWarn("Rate limit exceeded on /oauth2/connect", "client_ip", getClientIP(r))
+		w.Header().Set("Retry-After", "60")
+		http.Error(w, "Too many login attempts. Please wait a moment and try again.", http.StatusTooManyRequests)
 		return
 	}
 
@@ -483,7 +500,7 @@ func (p *Plugin) getOrCreateUser(userInfo *AuthentikUserInfo, config *Configurat
 		LastName:      userInfo.LastName,
 		AuthService:   AuthService,
 		AuthData:      model.NewPointer(userInfo.Subject),
-		EmailVerified: userInfo.EmailVerified == nil || *userInfo.EmailVerified,
+		EmailVerified: userInfo.EmailVerified != nil && *userInfo.EmailVerified,
 	}
 
 	createdUser, appErr := p.API.CreateUser(newUser)

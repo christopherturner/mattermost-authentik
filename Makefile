@@ -31,7 +31,7 @@ server:
 ## Compile webapp bundle
 webapp:
 	@echo "==> Building webapp..."
-	@cd webapp && npm install && npm run build
+	@cd webapp && npm ci && npm run build
 	@echo "==> Webapp build complete."
 
 ## Run server tests

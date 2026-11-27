@@ -57,6 +57,9 @@ type Plugin struct {
 	retryLock          sync.Mutex
 	lastDiscoveryRetry time.Time
 
+	connectLimiterOnce sync.Once
+	connectLimiter     *ipRateLimiter
+
 	router *mux.Router
 }
 

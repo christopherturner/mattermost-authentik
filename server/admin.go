@@ -15,13 +15,9 @@ import (
 	"github.com/mattermost/mattermost/server/public/model"
 )
 
-// handleGetLDAPUsers lists all active users whose auth_service is set to "ldap".
-func (p *Plugin) handleGetLDAPUsers(w http.ResponseWriter, r *http.Request) {
-	if !p.checkAdminAuthorization(w, r) {
-		return
-	}
-
-	var ldapUsers []map[string]interface{}
+// getActiveLDAPUsers returns all active users whose auth_service is set to "ldap".
+func (p *Plugin) getActiveLDAPUsers() []*model.User {
+	var ldapUsers []*model.User
 	page := 0
 	perPage := 200
 
@@ -36,14 +32,7 @@ func (p *Plugin) handleGetLDAPUsers(w http.ResponseWriter, r *http.Request) {
 
 		for _, u := range users {
 			if u.AuthService == "ldap" && u.DeleteAt == 0 {
-				ldapUsers = append(ldapUsers, map[string]interface{}{
-					"id":         u.Id,
-					"username":   u.Username,
-					"email":      u.Email,
-					"first_name": u.FirstName,
-					"last_name":  u.LastName,
-					"roles":      u.Roles,
-				})
+				ldapUsers = append(ldapUsers, u)
 			}
 		}
 
@@ -51,6 +40,28 @@ func (p *Plugin) handleGetLDAPUsers(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		page++
+	}
+
+	return ldapUsers
+}
+
+// handleGetLDAPUsers lists all active users whose auth_service is set to "ldap".
+func (p *Plugin) handleGetLDAPUsers(w http.ResponseWriter, r *http.Request) {
+	if !p.checkAdminAuthorization(w, r) {
+		return
+	}
+
+	activeUsers := p.getActiveLDAPUsers()
+	ldapUsers := make([]map[string]interface{}, 0, len(activeUsers))
+	for _, u := range activeUsers {
+		ldapUsers = append(ldapUsers, map[string]interface{}{
+			"id":         u.Id,
+			"username":   u.Username,
+			"email":      u.Email,
+			"first_name": u.FirstName,
+			"last_name":  u.LastName,
+			"roles":      u.Roles,
+		})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -75,23 +86,8 @@ func (p *Plugin) handleUnlockLDAPUsers(w http.ResponseWriter, r *http.Request) {
 
 	targetIDs := req.UserIDs
 	if len(targetIDs) == 0 {
-		// Unlock all LDAP users
-		page := 0
-		perPage := 200
-		for {
-			users, appErr := p.API.GetUsers(&model.UserGetOptions{Page: page, PerPage: perPage})
-			if appErr != nil || len(users) == 0 {
-				break
-			}
-			for _, u := range users {
-				if u.AuthService == "ldap" && u.DeleteAt == 0 {
-					targetIDs = append(targetIDs, u.Id)
-				}
-			}
-			if len(users) < perPage {
-				break
-			}
-			page++
+		for _, u := range p.getActiveLDAPUsers() {
+			targetIDs = append(targetIDs, u.Id)
 		}
 	}
 
@@ -134,22 +130,8 @@ func (p *Plugin) handleDeactivateLDAPUsers(w http.ResponseWriter, r *http.Reques
 
 	targetIDs := req.UserIDs
 	if len(targetIDs) == 0 {
-		page := 0
-		perPage := 200
-		for {
-			users, appErr := p.API.GetUsers(&model.UserGetOptions{Page: page, PerPage: perPage})
-			if appErr != nil || len(users) == 0 {
-				break
-			}
-			for _, u := range users {
-				if u.AuthService == "ldap" && u.DeleteAt == 0 {
-					targetIDs = append(targetIDs, u.Id)
-				}
-			}
-			if len(users) < perPage {
-				break
-			}
-			page++
+		for _, u := range p.getActiveLDAPUsers() {
+			targetIDs = append(targetIDs, u.Id)
 		}
 	}
 
